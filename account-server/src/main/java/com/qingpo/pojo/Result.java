@@ -12,6 +12,7 @@ public class Result {
     private String msg; //错误信息
     private Object data; //数据
 
+
     public static Result success() {
         Result result = new Result();
         result.code = 1;
