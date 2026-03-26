@@ -1,0 +1,13 @@
+2026-03-23 23:32:19.609 [main] INFO  com.qingpo.AccountServerApplicationTests - Starting AccountServerApplicationTests using Java 25.0.2 with PID 38680 (started by 青魄啊 in D:\myproject\javaproject\account\account-server)
+2026-03-23 23:32:19.611 [main] INFO  com.qingpo.AccountServerApplicationTests - No active profile set, falling back to 1 default profile: "default"
+2026-03-23 23:32:21.137 [main] INFO  com.qingpo.AccountServerApplicationTests - Started AccountServerApplicationTests in 2.118 seconds (process running for 3.949)
+2026-03-23 23:32:31.163 [main] INFO  com.qingpo.AccountServerApplicationTests - Starting AccountServerApplicationTests using Java 25.0.2 with PID 38008 (started by 青魄啊 in D:\myproject\javaproject\account\account-server)
+2026-03-23 23:32:31.174 [main] INFO  com.qingpo.AccountServerApplicationTests - No active profile set, falling back to 1 default profile: "default"
+2026-03-23 23:32:32.723 [main] INFO  com.qingpo.AccountServerApplicationTests - Started AccountServerApplicationTests in 2.099 seconds (process running for 3.728)
+2026-03-23 23:33:37.148 [main] INFO  com.qingpo.AccountServerApplicationTests - Starting AccountServerApplicationTests using Java 25.0.2 with PID 38140 (started by 青魄啊 in D:\myproject\javaproject\account\account-server)
+2026-03-23 23:33:37.149 [main] INFO  com.qingpo.AccountServerApplicationTests - No active profile set, falling back to 1 default profile: "default"
+2026-03-23 23:33:38.572 [main] INFO  com.qingpo.AccountServerApplicationTests - Started AccountServerApplicationTests in 1.966 seconds (process running for 3.509)
+2026-03-23 23:34:44.284 [main] INFO  com.qingpo.AccountServerApplicationTests - Starting AccountServerApplicationTests using Java 25.0.2 with PID 4196 (started by 青魄啊 in D:\myproject\javaproject\account\account-server)
+2026-03-23 23:34:44.287 [main] INFO  com.qingpo.AccountServerApplicationTests - No active profile set, falling back to 1 default profile: "default"
+2026-03-23 23:34:46.058 [main] INFO  com.qingpo.AccountServerApplicationTests - Started AccountServerApplicationTests in 2.389 seconds (process running for 4.279)
+2026-03-23 23:34:46.751 [main] INFO  com.qingpo.AccountServerApplicationTests - debug
