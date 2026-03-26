@@ -1,4 +1,4 @@
-package com.qingpo.pojo;
+package com.qingpo.pojo.user;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

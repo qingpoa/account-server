@@ -1,6 +1,6 @@
 package com.qingpo.mapper;
 
-import com.qingpo.pojo.User;
+import com.qingpo.pojo.user.User;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Select;
 

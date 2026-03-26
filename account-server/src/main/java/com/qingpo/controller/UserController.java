@@ -1,13 +1,12 @@
 package com.qingpo.controller;
 
 import com.qingpo.pojo.Result;
-import com.qingpo.pojo.User;
-import com.qingpo.pojo.UserLoginV;
+import com.qingpo.pojo.user.User;
+import com.qingpo.pojo.user.UserLoginV;
 import com.qingpo.service.AuthService;
 import com.qingpo.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.el.parser.Token;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
