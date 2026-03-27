@@ -6,7 +6,7 @@ import lombok.Data;
  * 后端统一返回结果
  */
 @Data
-public class Result {
+public class Result{
 
     public static final Integer SUCCESS = 200; //成功
     public static final Integer BAD_REQUEST = 400; //请求错误

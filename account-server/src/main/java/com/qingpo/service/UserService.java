@@ -1,9 +1,6 @@
 package com.qingpo.service;
 
-import com.qingpo.pojo.user.User;
-import com.qingpo.pojo.user.UserLoginV;
-import com.qingpo.pojo.user.UserRegisterVO;
-import com.qingpo.pojo.user.UserVO;
+import com.qingpo.pojo.user.*;
 
 public interface UserService {
 
@@ -12,4 +9,8 @@ public interface UserService {
     UserLoginV login(User user);
 
     UserRegisterVO register(User user);
+
+    void updatePassword(UserChangePassword ucp);
+
+    void updateUserInfo(UserVO user);
 }

@@ -21,7 +21,8 @@ public class JwtUtils {
 
     private JwtUtils() {
     }
-
+    
+    // 生成JWT
     public static String generateJwt(Map<String, Object> payload) {
         Date now = new Date();
         Date expireDate = new Date(now.getTime() + EXPIRE_TIME);
@@ -33,7 +34,7 @@ public class JwtUtils {
                 .signWith(SECRET_KEY)
                 .compact();
     }
-
+    // 解析JWT
     public static Map<String, Object> parseJwt(String token) {
         Claims claims = Jwts.parser()
                 .verifyWith(SECRET_KEY)

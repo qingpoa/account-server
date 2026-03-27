@@ -1,8 +1,10 @@
 package com.qingpo.mapper;
 
 import com.qingpo.pojo.user.User;
+import com.qingpo.pojo.user.UserVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 @Mapper
 public interface UserMapper {
@@ -14,4 +16,9 @@ public interface UserMapper {
     User getUserInfoById(Long id);
 
     int insertUser(User user);
+
+    @Update("update user set password = #{newEncodedPassword} where id = #{userId}")
+    void updatePassword(Integer userId, String newEncodedPassword);
+
+    void updateUserInfo(UserVO user);
 }

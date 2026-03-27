@@ -4,7 +4,9 @@ import com.qingpo.context.UserContext;
 import com.qingpo.exception.BusinessException;
 import com.qingpo.pojo.Result;
 import com.qingpo.pojo.user.User;
+import com.qingpo.pojo.user.UserChangePassword;
 import com.qingpo.pojo.user.UserLoginV;
+import com.qingpo.pojo.user.UserVO;
 import com.qingpo.service.UserService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -55,6 +57,42 @@ public class UserController {
 
     }
 
+
+    @PutMapping("/password")
+    public ResponseEntity<Result> updatePassword(@RequestBody UserChangePassword ucp) {
+        Long userId = UserContext.getCurrentUserId();
+        if (userId == null) {
+            throw new BusinessException(Result.UNAUTHORIZED, "未登录或登录已过期");
+        }
+        if (ucp == null
+                || ucp.getOldPassword() == null || ucp.getOldPassword().isBlank()
+                || ucp.getNewPassword() == null || ucp.getNewPassword().isBlank()) {
+            return response(Result.BAD_REQUEST, Result.error(Result.BAD_REQUEST, "旧密码和新密码不能为空"));
+        }
+        ucp.setUserId(Math.toIntExact(userId));
+        userService.updatePassword(ucp);
+        return response(Result.SUCCESS, Result.success());
+
+    }
+
+    @PutMapping("/info")
+    public ResponseEntity<Result> updateInfo(@RequestBody UserVO user) {
+        Long userId = UserContext.getCurrentUserId();
+        if (userId == null) {
+            throw new BusinessException(Result.UNAUTHORIZED, "未登录或登录已过期");
+        }
+        if (user == null) {
+            return response(Result.BAD_REQUEST, Result.error(Result.BAD_REQUEST, "请求参数不能为空"));
+        }
+        if ((user.getNickname() == null || user.getNickname().isBlank())
+                && (user.getAvatar() == null || user.getAvatar().isBlank())
+                && user.getEnableOverspendAlert() == null) {
+            return response(Result.BAD_REQUEST, Result.error(Result.BAD_REQUEST, "至少传入一个需要修改的字段"));
+        }
+        user.setUserId((long) Math.toIntExact(userId));
+        userService.updateUserInfo(user);
+        return response(Result.SUCCESS, Result.success());
+    }
 
 
     private ResponseEntity<Result> response(Integer status, Result result) {

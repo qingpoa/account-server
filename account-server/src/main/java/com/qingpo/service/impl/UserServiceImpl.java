@@ -3,10 +3,7 @@ package com.qingpo.service.impl;
 import com.qingpo.exception.BusinessException;
 import com.qingpo.mapper.UserMapper;
 import com.qingpo.pojo.Result;
-import com.qingpo.pojo.user.User;
-import com.qingpo.pojo.user.UserLoginV;
-import com.qingpo.pojo.user.UserRegisterVO;
-import com.qingpo.pojo.user.UserVO;
+import com.qingpo.pojo.user.*;
 import com.qingpo.service.UserService;
 import com.qingpo.utils.JwtUtils;
 import com.qingpo.utils.PasswordUtils;
@@ -93,6 +90,36 @@ public class UserServiceImpl implements UserService {
         String token = JwtUtils.generateJwt(payload);
         return new UserRegisterVO(user.getId(), token);
 
+    }
+
+    @Override
+    public void updatePassword(UserChangePassword ucp) {
+        if (ucp == null
+                || ucp.getOldPassword() == null || ucp.getOldPassword().isBlank()
+                || ucp.getNewPassword() == null || ucp.getNewPassword().isBlank()) {
+            throw new BusinessException(Result.BAD_REQUEST, "旧密码和新密码不能为空");
+        }
+        if (ucp.getOldPassword().equals(ucp.getNewPassword())) {
+            throw new BusinessException(Result.BAD_REQUEST, "新密码不能与旧密码相同");
+        }
+        User user = userMapper.getUserInfoById(Long.valueOf(ucp.getUserId()));
+        if (user == null) {
+            throw new BusinessException(Result.NOT_FOUND, "用户不存在");
+        }
+        if (!PasswordUtils.matches(ucp.getOldPassword(), user.getPassword())) {
+            throw new BusinessException(Result.BAD_REQUEST, "旧密码错误");
+        }
+        String newEncodedPassword = PasswordUtils.encode(ucp.getNewPassword());
+        userMapper.updatePassword(ucp.getUserId(), newEncodedPassword);
+    }
+
+    @Override
+    public void updateUserInfo(UserVO user) {
+        User dbUser = userMapper.getUserInfoById(user.getUserId());
+        if (dbUser == null) {
+            throw new BusinessException(Result.NOT_FOUND, "用户不存在");
+        }
+        userMapper.updateUserInfo(user);
     }
 
 

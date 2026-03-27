@@ -16,4 +16,21 @@
         )
     </insert>
 
+    <update id="updateUserInfo" parameterType="com.qingpo.pojo.user.UserVO">
+        update user
+        <set>
+            <if test="nickname != null and nickname != ''">
+                nickname = #{nickname},
+            </if>
+            <if test="avatar != null and avatar != ''">
+                avatar = #{avatar},
+            </if>
+            <if test="enableOverspendAlert != null">
+                enable_overspend_alert = #{enableOverspendAlert},
+            </if>
+        </set>
+        where id = #{userId}
+          and is_deleted = 0
+    </update>
+
 </mapper>
