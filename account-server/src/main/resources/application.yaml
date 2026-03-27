@@ -9,6 +9,7 @@ spring:
 
 #mybatis相关配置
 mybatis:
+  mapper-locations: classpath:com/qingpo/mapper/*.xml
   configuration:
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
     map-underscore-to-camel-case: true
@@ -17,4 +18,3 @@ server:
   servlet:
     context-path: /api/v1
   port: 8080
-
