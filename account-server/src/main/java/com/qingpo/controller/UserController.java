@@ -58,6 +58,7 @@ public class UserController {
     }
 
 
+    // 修改密码
     @PutMapping("/password")
     public ResponseEntity<Result> updatePassword(@RequestBody UserChangePassword ucp) {
         Long userId = UserContext.getCurrentUserId();
@@ -75,6 +76,7 @@ public class UserController {
 
     }
 
+    // 修改用户信息
     @PutMapping("/info")
     public ResponseEntity<Result> updateInfo(@RequestBody UserVO user) {
         Long userId = UserContext.getCurrentUserId();

@@ -18,7 +18,7 @@ public interface UserMapper {
     int insertUser(User user);
 
     @Update("update user set password = #{newEncodedPassword} where id = #{userId}")
-    void updatePassword(Integer userId, String newEncodedPassword);
+    int updatePassword(Integer userId, String newEncodedPassword);
 
-    void updateUserInfo(UserVO user);
+    int updateUserInfo(UserVO user);
 }

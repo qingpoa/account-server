@@ -1,5 +1,6 @@
 package com.qingpo.service.impl;
 
+import com.qingpo.annotation.OperationLog;
 import com.qingpo.exception.BusinessException;
 import com.qingpo.mapper.UserMapper;
 import com.qingpo.pojo.Result;
@@ -66,6 +67,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @OperationLog(module = "USER", type = "INSERT")
     public UserRegisterVO register(User user) {
         User dbUser = userMapper.getUserInfoByUserName(user.getUsername());
         if (dbUser != null) {
@@ -93,6 +95,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @OperationLog(module = "USER", type = "UPDATE")
     public void updatePassword(UserChangePassword ucp) {
         if (ucp == null
                 || ucp.getOldPassword() == null || ucp.getOldPassword().isBlank()
@@ -110,16 +113,23 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(Result.BAD_REQUEST, "旧密码错误");
         }
         String newEncodedPassword = PasswordUtils.encode(ucp.getNewPassword());
-        userMapper.updatePassword(ucp.getUserId(), newEncodedPassword);
+        int rows = userMapper.updatePassword(ucp.getUserId(), newEncodedPassword);
+        if (rows == 0) {
+            throw new BusinessException(Result.SERVER_ERROR, "修改密码失败");
+        }
     }
 
     @Override
+    @OperationLog(module = "USER", type = "UPDATE")
     public void updateUserInfo(UserVO user) {
         User dbUser = userMapper.getUserInfoById(user.getUserId());
         if (dbUser == null) {
             throw new BusinessException(Result.NOT_FOUND, "用户不存在");
         }
-        userMapper.updateUserInfo(user);
+        int rows = userMapper.updateUserInfo(user);
+        if (rows == 0) {
+            throw new BusinessException(Result.SERVER_ERROR, "更新用户信息失败");
+        }
     }
 
 
