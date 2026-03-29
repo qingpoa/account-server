@@ -1,5 +1,6 @@
 package com.qingpo.controller;
 
+import com.qingpo.context.UserContext;
 import com.qingpo.pojo.Result;
 import com.qingpo.service.CategoryService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,11 +10,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Set;
-
 @RestController
 @RequestMapping("/category")
-public class CategoryController {
+public class CategoryController extends BaseController {
 
     @Autowired
     private CategoryService categoryService;
@@ -21,10 +20,6 @@ public class CategoryController {
     // 获取分类列表
     @GetMapping("/list")
     public ResponseEntity<Result> list(@RequestParam(required = false) Integer type) {
-        return response(200, Result.success(categoryService.list(type)));
-    }
-
-    private ResponseEntity<Result> response(Integer status, Result result) {
-        return ResponseEntity.status(status).body(result);
+        return response(Result.SUCCESS, Result.success(categoryService.list(type)));
     }
 }

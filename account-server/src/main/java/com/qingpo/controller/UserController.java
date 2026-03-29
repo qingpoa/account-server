@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.*;
 @Slf4j
 @RestController
 @RequestMapping("/user")
-public class UserController {
+public class UserController extends BaseController {
 
     @Autowired
     private UserService userService;
@@ -94,10 +94,5 @@ public class UserController {
         user.setUserId((long) Math.toIntExact(userId));
         userService.updateUserInfo(user);
         return response(Result.SUCCESS, Result.success());
-    }
-
-
-    private ResponseEntity<Result> response(Integer status, Result result) {
-        return ResponseEntity.status(status).body(result);
     }
 }
