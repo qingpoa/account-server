@@ -1,7 +1,12 @@
 package com.qingpo.service.impl;
 
+import com.qingpo.exception.BusinessException;
 import com.qingpo.mapper.BudgetMapper;
+import com.qingpo.pojo.Result;
+import com.qingpo.pojo.budget.BudgetConfig;
 import com.qingpo.pojo.budget.BudgetListVO;
+import com.qingpo.pojo.budget.BudgetSaveDTO;
+import com.qingpo.pojo.budget.BudgetSaveVO;
 import com.qingpo.pojo.budget.BudgetUsedVO;
 import com.qingpo.service.BudgetService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -78,6 +83,57 @@ public class BudgetServiceImpl implements BudgetService {
         return budgetListVOList;
     }
 
+    @Override
+    public BudgetSaveVO save(Long userId, BudgetSaveDTO dto) {
+        if (userId == null) {
+            throw new BusinessException(Result.UNAUTHORIZED, "未登录或登录已过期");
+        }
+        if (dto == null) {
+            throw new BusinessException(Result.BAD_REQUEST, "请求参数不能为空");
+        }
+        if (dto.getCategoryId() == null) {
+            throw new BusinessException(Result.BAD_REQUEST, "分类ID不能为空");
+        }
+        if (dto.getBudgetCycle() == null || (dto.getBudgetCycle() != 1 && dto.getBudgetCycle() != 2 && dto.getBudgetCycle() != 3)) {
+            throw new BusinessException(Result.BAD_REQUEST, "预算周期参数错误");
+        }
+        if (dto.getBudgetAmount() == null) {
+            throw new BusinessException(Result.BAD_REQUEST, "预算金额不能为空");
+        }
+        if (dto.getBudgetAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException(Result.BAD_REQUEST, "预算金额必须大于0");
+        }
+        Integer categoryCount = budgetMapper.countCategoryById(dto.getCategoryId());
+        if (categoryCount == null || categoryCount == 0) {
+            throw new BusinessException(Result.BAD_REQUEST, "分类不存在");
+        }
+        BudgetConfig existingBudget = budgetMapper.findByUserIdAndCategoryIdAndCycle(
+                userId,
+                dto.getCategoryId(),
+                dto.getBudgetCycle()
+        );
+        if (existingBudget != null) {
+            int rows = budgetMapper.updateBudgetAmount(existingBudget.getId(), userId, dto.getBudgetAmount());
+            if (rows == 0) {
+                throw new BusinessException(Result.SERVER_ERROR, "预算更新失败");
+            }
+            return new BudgetSaveVO(existingBudget.getId());
+        }
+
+        BudgetConfig budgetConfig = new BudgetConfig();
+        budgetConfig.setUserId(userId);
+        budgetConfig.setCategoryId(dto.getCategoryId());
+        budgetConfig.setBudgetCycle(dto.getBudgetCycle());
+        budgetConfig.setBudgetAmount(dto.getBudgetAmount());
+        budgetConfig.setIsDeleted(0);
+
+        int rows = budgetMapper.insertBudget(budgetConfig);
+        if (rows == 0 || budgetConfig.getId() == null) {
+            throw new BusinessException(Result.SERVER_ERROR, "预算保存失败");
+        }
+        return new BudgetSaveVO(budgetConfig.getId());
+    }
+
     private LocalDateTime[] getCurrentCycleTimeRange(Integer budgetCycle) {
         LocalDate today = LocalDate.now();
         LocalDate startDate;
@@ -103,4 +159,3 @@ public class BudgetServiceImpl implements BudgetService {
         return new LocalDateTime[]{startDate.atStartOfDay(), endDate.atStartOfDay()};
     }
 }
-

@@ -23,6 +23,52 @@
         order by bc.budget_cycle asc, bc.id asc
     </select>
 
+    <select id="countCategoryById" resultType="java.lang.Integer">
+        select count(1)
+        from system_category
+        where id = #{categoryId}
+    </select>
+
+    <select id="findByUserIdAndCategoryIdAndCycle" resultType="com.qingpo.pojo.budget.BudgetConfig">
+        select
+            id,
+            user_id,
+            category_id,
+            budget_cycle,
+            budget_amount,
+            create_time,
+            update_time,
+            is_deleted
+        from budget_config
+        where user_id = #{userId}
+          and category_id = #{categoryId}
+          and budget_cycle = #{budgetCycle}
+          and is_deleted = 0
+        limit 1
+    </select>
+
+    <insert id="insertBudget" useGeneratedKeys="true" keyProperty="id">
+        insert into budget_config (
+            user_id,
+            category_id,
+            budget_cycle,
+            budget_amount
+        ) values (
+            #{userId},
+            #{categoryId},
+            #{budgetCycle},
+            #{budgetAmount}
+        )
+    </insert>
+
+    <update id="updateBudgetAmount">
+        update budget_config
+        set budget_amount = #{budgetAmount}
+        where id = #{id}
+          and user_id = #{userId}
+          and is_deleted = 0
+    </update>
+
     <select id="sumUsedAmountByCategory" resultType="com.qingpo.pojo.budget.BudgetUsedVO">
         select
             b.category_id as categoryId,
