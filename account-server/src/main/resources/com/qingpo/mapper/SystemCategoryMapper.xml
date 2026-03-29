@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.qingpo.mapper.SystemCategoryMapper">
+
+    <select id="list" resultType="com.qingpo.pojo.category.SystemCategory">
+        SELECT id, name, type, icon, sort
+        FROM system_category
+        <where>
+            <if test="type != null">
+                type = #{type}
+            </if>
+        </where>
+        ORDER BY sort asc, id asc
+    </select>
+
+</mapper>
