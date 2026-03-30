@@ -5,12 +5,8 @@ import com.qingpo.exception.BusinessException;
 import com.qingpo.mapper.BillMapper;
 import com.qingpo.pojo.PageResult;
 import com.qingpo.pojo.Result;
+import com.qingpo.pojo.bill.*;
 import com.qingpo.pojo.budget.BudgetConfig;
-import com.qingpo.pojo.bill.Bill;
-import com.qingpo.pojo.bill.BillListVO;
-import com.qingpo.pojo.bill.BillQueryDTO;
-import com.qingpo.pojo.bill.BillSaveDTO;
-import com.qingpo.pojo.bill.BillSaveVO;
 import com.qingpo.pojo.category.SystemCategory;
 import com.qingpo.service.BillService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +17,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 public class BillServiceImpl implements BillService {
@@ -87,14 +84,57 @@ public class BillServiceImpl implements BillService {
         return new BillSaveVO(bill.getId(), overspendAlert);
     }
 
+    @OperationLog(module = "BILL", type = "UPDATE")
     @Override
-    public void update(Long userId, Long id, BillSaveDTO dto) {
+    public void update(Long userId, Long id, BillUpdateDTO dto) {
         if (userId == null)
             throw new BusinessException(Result.UNAUTHORIZED, "未登录或登录已过期");
         if (id == null)
             throw new BusinessException(Result.BAD_REQUEST, "ID不能为空");
-        Bill bill = billMapper.getById(id,userId);
+        if (dto == null)
+            return;
+        if (dto.getCategoryId() == null && dto.getAmount() == null && dto.getRemark() == null && dto.getRecordTime() == null) {
+            return;
+        }
+        Bill bill = billMapper.getById(id, userId);
+        if (dto.getAmount() != null && dto.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException(Result.BAD_REQUEST, "金额必须大于0");
+        }
+        if (dto.getCategoryId() != null) {
+            SystemCategory category = billMapper.getCategoryById(dto.getCategoryId());
+            if (category == null) {
+                throw new BusinessException(Result.BAD_REQUEST, "分类不存在");
+            }
+            if (category.getType() == null || !category.getType().equals(bill.getType())) {
+                throw new BusinessException(Result.BAD_REQUEST, "账单类型与分类类型不一致");
+            }
+        }
+        if (isUnchanged(dto, bill)) {
+            return;
+        }
 
+        int row = billMapper.update(id, userId, dto);
+        if (row == 0) {
+            throw new BusinessException(Result.SERVER_ERROR, "更新账单失败");
+        }
+
+
+    }
+
+    private static boolean isUnchanged(BillUpdateDTO dto, Bill bill) {
+        if (bill == null) {
+            throw new BusinessException(Result.NOT_FOUND, "账单不存在");
+        }
+
+        Long targetCategoryId = dto.getCategoryId() != null ? dto.getCategoryId() : bill.getCategoryId();
+        BigDecimal targetAmount = dto.getAmount() != null ? dto.getAmount() : bill.getAmount();
+        String targetRemark = dto.getRemark() != null ? dto.getRemark() : bill.getRemark();
+        LocalDateTime targetRecordTime = dto.getRecordTime() != null ? dto.getRecordTime() : bill.getRecordTime();
+
+        return bill.getCategoryId().equals(targetCategoryId)
+                        && bill.getAmount().compareTo(targetAmount) == 0
+                        && Objects.equals(bill.getRemark(), targetRemark)
+                        && bill.getRecordTime().equals(targetRecordTime);
     }
 
     private String buildOverspendAlert(Long userId, SystemCategory category, Bill bill) {

@@ -5,6 +5,7 @@ import com.qingpo.exception.BusinessException;
 import com.qingpo.pojo.Result;
 import com.qingpo.pojo.bill.BillQueryDTO;
 import com.qingpo.pojo.bill.BillSaveDTO;
+import com.qingpo.pojo.bill.BillUpdateDTO;
 import com.qingpo.service.BillService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -36,7 +37,7 @@ public class BillController extends BaseController{
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Result> update(@PathVariable Long id, @RequestBody BillSaveDTO dto) {
+    public ResponseEntity<Result> update(@PathVariable Long id, @RequestBody BillUpdateDTO dto) {
         Long userId = UserContext.getCurrentUserId();
         if (userId == null) {
             throw new BusinessException(Result.UNAUTHORIZED, "未登录或登录已过期");

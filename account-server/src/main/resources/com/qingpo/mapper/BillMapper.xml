@@ -3,6 +3,25 @@
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.qingpo.mapper.BillMapper">
+    <update id="update">
+        update bill
+        <set>
+            <if test="dto.categoryId != null">
+                category_id = #{dto.categoryId},
+            </if>
+            <if test="dto.amount != null">
+                amount = #{dto.amount},
+            </if>
+            <if test="dto.remark != null">
+                remark = #{dto.remark},
+            </if>
+            <if test="dto.recordTime != null">
+                record_time = #{dto.recordTime},
+            </if>
+
+        </set>
+        where id = #{id} and user_id = #{userId} and is_deleted = 0
+    </update>
 
     <select id="list" resultType="com.qingpo.pojo.bill.BillListVO">
         select

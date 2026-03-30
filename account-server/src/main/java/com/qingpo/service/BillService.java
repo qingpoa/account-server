@@ -1,10 +1,7 @@
 package com.qingpo.service;
 
 import com.qingpo.pojo.PageResult;
-import com.qingpo.pojo.bill.BillListVO;
-import com.qingpo.pojo.bill.BillQueryDTO;
-import com.qingpo.pojo.bill.BillSaveDTO;
-import com.qingpo.pojo.bill.BillSaveVO;
+import com.qingpo.pojo.bill.*;
 
 public interface BillService {
 
@@ -12,5 +9,5 @@ public interface BillService {
 
     BillSaveVO save(Long userId, BillSaveDTO dto);
 
-    void update(Long userId, Long id, BillSaveDTO dto);
+    void update(Long userId, Long id, BillUpdateDTO dto);
 }
