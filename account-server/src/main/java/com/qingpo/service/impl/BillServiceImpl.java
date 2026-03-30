@@ -121,6 +121,31 @@ public class BillServiceImpl implements BillService {
 
     }
 
+    @OperationLog(module = "BILL", type = "DELETE")
+    @Override
+    public void delete(Long userId, Long id) {
+        if (userId == null) {
+            throw new BusinessException(Result.UNAUTHORIZED, "未登录或登录已过期");
+        }
+        if (id == null) {
+            throw new BusinessException(Result.BAD_REQUEST, "ID不能为空");
+        }
+
+        Bill bill = billMapper.getById(id, userId);
+        if (bill == null) {
+            throw new BusinessException(Result.NOT_FOUND, "账单不存在");
+        }
+
+        int rows = billMapper.delete(id, userId);
+        if (rows == 0) {
+            throw new BusinessException(Result.SERVER_ERROR, "账单删除失败");
+        }
+
+    }
+
+
+
+
     private static boolean isUnchanged(BillUpdateDTO dto, Bill bill) {
         if (bill == null) {
             throw new BusinessException(Result.NOT_FOUND, "账单不存在");

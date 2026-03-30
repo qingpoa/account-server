@@ -10,4 +10,6 @@ public interface BillService {
     BillSaveVO save(Long userId, BillSaveDTO dto);
 
     void update(Long userId, Long id, BillUpdateDTO dto);
+
+    void delete(Long userId, Long id);
 }

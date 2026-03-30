@@ -46,4 +46,14 @@ public class BillController extends BaseController{
         return response(Result.SUCCESS, Result.success());
     }
 
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Result> delete(@PathVariable Long id) {
+        Long userId = UserContext.getCurrentUserId();
+        if (userId == null) {
+            throw new BusinessException(Result.UNAUTHORIZED, "未登录或登录已过期");
+        }
+        billService.delete(userId, id);
+        return response(Result.SUCCESS, Result.success());
+    }
+
 }

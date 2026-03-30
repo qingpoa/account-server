@@ -39,4 +39,6 @@ public interface BillMapper {
     Bill getById(@Param("id") Long id, @Param("userId") Long userId);
 
     int update(@Param("id") Long id, @Param("userId") Long userId, @Param("dto") BillUpdateDTO dto);
+
+    int delete(@Param("id") Long id, @Param("userId") Long userId);
 }
