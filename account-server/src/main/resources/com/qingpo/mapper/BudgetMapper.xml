@@ -43,7 +43,6 @@
         where user_id = #{userId}
           and category_id = #{categoryId}
           and budget_cycle = #{budgetCycle}
-          and is_deleted = 0
         limit 1
     </select>
 
@@ -67,6 +66,14 @@
         where id = #{id}
           and user_id = #{userId}
           and is_deleted = 0
+    </update>
+
+    <update id="restoreAndUpdateBudget">
+        update budget_config
+        set budget_amount = #{budgetAmount},
+            is_deleted = 0
+        where id = #{id}
+          and user_id = #{userId}
     </update>
 
     <select id="sumUsedAmountByCategory" resultType="com.qingpo.pojo.budget.BudgetUsedVO">

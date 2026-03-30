@@ -1,10 +1,12 @@
 package com.qingpo.service.impl;
 
+import com.qingpo.annotation.OperationLog;
 import com.qingpo.exception.BusinessException;
 import com.qingpo.mapper.BudgetMapper;
 import com.qingpo.pojo.Result;
 import com.qingpo.pojo.budget.BudgetConfig;
 import com.qingpo.pojo.budget.BudgetListVO;
+import com.qingpo.pojo.budget.BudgetProgressVO;
 import com.qingpo.pojo.budget.BudgetSaveDTO;
 import com.qingpo.pojo.budget.BudgetSaveVO;
 import com.qingpo.pojo.budget.BudgetUsedVO;
@@ -84,6 +86,39 @@ public class BudgetServiceImpl implements BudgetService {
     }
 
     @Override
+    public BudgetProgressVO progress(Long userId, Integer cycle) {
+        if (userId == null) {
+            throw new BusinessException(Result.UNAUTHORIZED, "未登录或登录已过期");
+        }
+        if (cycle == null || (cycle != 1 && cycle != 2 && cycle != 3)) {
+            throw new BusinessException(Result.BAD_REQUEST, "预算周期参数错误");
+        }
+        List<BudgetListVO> categoryProgress = this.list(userId, cycle);
+        BigDecimal totalBudget = BigDecimal.ZERO;
+        BigDecimal totalUsed = BigDecimal.ZERO;
+        BigDecimal totalRemain = BigDecimal.ZERO;
+        int overspendCount = 0;
+
+        for (BudgetListVO budget : categoryProgress) {
+            totalBudget = totalBudget.add(budget.getBudgetAmount());
+            totalUsed = totalUsed.add(budget.getUsedAmount());
+            totalRemain = totalRemain.add(budget.getRemainAmount());
+            if (budget.getRemainAmount().compareTo(BigDecimal.ZERO) < 0) {
+                overspendCount++;
+            }
+        }
+
+        return new BudgetProgressVO(
+                totalBudget,
+                totalUsed,
+                totalRemain,
+                overspendCount,
+                categoryProgress
+        );
+    }
+
+    @OperationLog(module = "BUDGET", type = "INSERT/UPDATE")
+    @Override
     public BudgetSaveVO save(Long userId, BudgetSaveDTO dto) {
         if (userId == null) {
             throw new BusinessException(Result.UNAUTHORIZED, "未登录或登录已过期");
@@ -113,7 +148,12 @@ public class BudgetServiceImpl implements BudgetService {
                 dto.getBudgetCycle()
         );
         if (existingBudget != null) {
-            int rows = budgetMapper.updateBudgetAmount(existingBudget.getId(), userId, dto.getBudgetAmount());
+            int rows;
+            if (existingBudget.getIsDeleted() != null && existingBudget.getIsDeleted() == 1) {
+                rows = budgetMapper.restoreAndUpdateBudget(existingBudget.getId(), userId, dto.getBudgetAmount());
+            } else {
+                rows = budgetMapper.updateBudgetAmount(existingBudget.getId(), userId, dto.getBudgetAmount());
+            }
             if (rows == 0) {
                 throw new BusinessException(Result.SERVER_ERROR, "预算更新失败");
             }
@@ -132,6 +172,21 @@ public class BudgetServiceImpl implements BudgetService {
             throw new BusinessException(Result.SERVER_ERROR, "预算保存失败");
         }
         return new BudgetSaveVO(budgetConfig.getId());
+    }
+
+    @OperationLog(module = "BUDGET", type = "DELETE")
+    @Override
+    public void delete(Long userId, Long id) {
+        if (userId == null)
+            throw new BusinessException(Result.UNAUTHORIZED, "未登录或登录已过期");
+        if (id == null)
+            throw new BusinessException(Result.BAD_REQUEST, "参数不能为空");
+        BudgetConfig budgetConfig = budgetMapper.findByIdAndUserId(userId, id);
+        if (budgetConfig == null)
+            throw new BusinessException(Result.NOT_FOUND, "预算不存在");
+        int row = budgetMapper.delete(userId, id);
+        if (row == 0)
+            throw new BusinessException(Result.SERVER_ERROR, "预算删除失败");
     }
 
     private LocalDateTime[] getCurrentCycleTimeRange(Integer budgetCycle) {
