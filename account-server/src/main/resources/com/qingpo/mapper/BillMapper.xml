@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.qingpo.mapper.BillMapper">
+
+    <select id="list" resultType="com.qingpo.pojo.bill.BillListVO">
+        select
+            b.id,
+            b.amount,
+            b.type,
+            c.name as categoryName,
+            b.remark,
+            b.record_time as recordTime,
+            b.is_ai_generated as isAiGenerated
+        from bill b
+        left join system_category c on b.category_id = c.id
+        <where>
+            b.user_id = #{userId}
+            and b.is_deleted = 0
+            <if test="dto.startTime != null">
+                and b.record_time <![CDATA[ >= ]]> #{dto.startTime}
+            </if>
+            <if test="dto.endTime != null">
+                and b.record_time <![CDATA[ <= ]]> #{dto.endTime}
+            </if>
+            <if test="dto.type != null">
+                and b.type = #{dto.type}
+            </if>
+            <if test="dto.categoryId != null">
+                and b.category_id = #{dto.categoryId}
+            </if>
+        </where>
+        order by b.record_time desc, b.id desc
+        limit #{offset}, #{pageSize}
+    </select>
+
+    <select id="count" resultType="java.lang.Long">
+        select count(*)
+        from bill b
+        <where>
+            user_id = #{userId}
+            and is_deleted = 0
+            <if test="dto.startTime != null">
+                and b.record_time <![CDATA[ >= ]]> #{dto.startTime}
+            </if>
+            <if test="dto.endTime != null">
+                and b.record_time <![CDATA[ <= ]]> #{dto.endTime}
+            </if>
+            <if test="dto.type != null">
+                and b.type = #{dto.type}
+            </if>
+            <if test="dto.categoryId != null">
+                and b.category_id = #{dto.categoryId}
+            </if>
+        </where>
+
+    </select>
+
+    <select id="countCategoryById" resultType="java.lang.Integer">
+        select count(1)
+        from system_category
+        where id = #{categoryId}
+    </select>
+
+    <select id="getCategoryById" resultType="com.qingpo.pojo.category.SystemCategory">
+        select
+            id,
+            name,
+            type,
+            icon,
+            sort
+        from system_category
+        where id = #{categoryId}
+    </select>
+
+    <select id="listActiveBudgetsByUserIdAndCategoryId" resultType="com.qingpo.pojo.budget.BudgetConfig">
+        select
+            id,
+            user_id,
+            category_id,
+            budget_cycle,
+            budget_amount,
+            create_time,
+            update_time,
+            is_deleted
+        from budget_config
+        where user_id = #{userId}
+          and category_id = #{categoryId}
+          and is_deleted = 0
+    </select>
+
+    <select id="sumExpenseByCategoryAndTimeRange" resultType="java.math.BigDecimal">
+        select coalesce(sum(amount), 0)
+        from bill
+        where user_id = #{userId}
+          and category_id = #{categoryId}
+          and type = 2
+          and is_deleted = 0
+          and record_time <![CDATA[ >= ]]> #{startTime}
+          and record_time <![CDATA[ < ]]> #{endTime}
+    </select>
+
+    <insert id="insertBill" useGeneratedKeys="true" keyProperty="id">
+        insert into bill (
+            user_id,
+            category_id,
+            amount,
+            type,
+            remark,
+            record_time,
+            is_ai_generated,
+            is_deleted
+        ) values (
+            #{userId},
+            #{categoryId},
+            #{amount},
+            #{type},
+            #{remark},
+            #{recordTime},
+            #{isAiGenerated},
+            #{isDeleted}
+        )
+    </insert>
+
+
+</mapper>
