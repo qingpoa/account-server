@@ -143,7 +143,20 @@ public class BillServiceImpl implements BillService {
 
     }
 
-
+    @Override
+    public BillDetailVO detail(Long userId, Long id) {
+        if (userId == null) {
+            throw new BusinessException(Result.UNAUTHORIZED, "未登录或登录已过期");
+        }
+        Bill bill = billMapper.getById(id, userId);
+        if (bill == null) {
+            throw new BusinessException(Result.NOT_FOUND, "账单不存在");
+        }
+        SystemCategory category = billMapper.getCategoryById(bill.getCategoryId());
+        return new BillDetailVO(bill.getId(), bill.getAmount(), bill.getType(),
+                                bill.getCategoryId(), category.getName(),
+                                bill.getRemark(), bill.getRecordTime());
+    }
 
 
     private static boolean isUnchanged(BillUpdateDTO dto, Bill bill) {

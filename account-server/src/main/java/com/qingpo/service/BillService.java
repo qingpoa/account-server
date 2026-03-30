@@ -12,4 +12,6 @@ public interface BillService {
     void update(Long userId, Long id, BillUpdateDTO dto);
 
     void delete(Long userId, Long id);
+
+    BillDetailVO detail(Long userId, Long id);
 }

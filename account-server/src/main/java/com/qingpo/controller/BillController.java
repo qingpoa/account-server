@@ -1,5 +1,6 @@
 package com.qingpo.controller;
 
+import com.qingpo.annotation.OperationLog;
 import com.qingpo.context.UserContext;
 import com.qingpo.exception.BusinessException;
 import com.qingpo.pojo.Result;
@@ -54,6 +55,15 @@ public class BillController extends BaseController{
         }
         billService.delete(userId, id);
         return response(Result.SUCCESS, Result.success());
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<Result> detail(@PathVariable Long id) {
+        Long userId = UserContext.getCurrentUserId();
+        if (userId == null) {
+            throw new BusinessException(Result.UNAUTHORIZED, "未登录或登录已过期");
+        }
+        return response(Result.SUCCESS, Result.success(billService.detail(userId, id)));
     }
 
 }
