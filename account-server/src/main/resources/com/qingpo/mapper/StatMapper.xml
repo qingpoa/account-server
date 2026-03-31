@@ -15,18 +15,33 @@
           and record_time <![CDATA[ >= ]]> #{startTime}
           and record_time <![CDATA[ <= ]]> #{endTime}
     </select>
+
     <select id="category" resultType="com.qingpo.pojo.stat.StatCategoryVO">
         select
-        sc.name as categoryName,
-        coalesce(sum(b.amount), 0) as amount
+            sc.name as categoryName,
+            coalesce(sum(b.amount), 0) as amount
         from bill b
         left join system_category sc on b.category_id = sc.id
         where b.user_id = #{userId}
-        and b.type = #{type}
-        and b.is_deleted = 0
-        and b.record_time <![CDATA[ >= ]]> #{startTime}
-        and b.record_time <![CDATA[ <= ]]> #{endTime}
+          and b.type = #{type}
+          and b.is_deleted = 0
+          and b.record_time <![CDATA[ >= ]]> #{startTime}
+          and b.record_time <![CDATA[ <= ]]> #{endTime}
         group by b.category_id, sc.name
         order by amount desc
+    </select>
+
+    <select id="monthly" resultType="com.qingpo.pojo.stat.StatMonthlyVO">
+        select
+            date_format(record_time, '%Y-%m') as month,
+            coalesce(sum(case when type = 1 then amount else 0 end), 0) as income,
+            coalesce(sum(case when type = 2 then amount else 0 end), 0) as expense
+        from bill
+        where user_id = #{userId}
+          and is_deleted = 0
+          and record_time <![CDATA[ >= ]]> #{startTime}
+          and record_time <![CDATA[ < ]]> #{endTime}
+        group by date_format(record_time, '%Y-%m')
+        order by month asc
     </select>
 </mapper>

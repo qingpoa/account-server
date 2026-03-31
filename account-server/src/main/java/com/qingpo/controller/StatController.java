@@ -16,10 +16,11 @@ import java.time.LocalDateTime;
 
 @RestController
 @RequestMapping("/stat")
-public class StatController extends BaseController{
+public class StatController extends BaseController {
 
     @Autowired
     private StatService statService;
+
     @GetMapping("/overview")
     public ResponseEntity<Result> overview(@RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss")
                                            LocalDateTime startTime,
@@ -31,18 +32,36 @@ public class StatController extends BaseController{
         }
         return response(Result.SUCCESS, Result.success(statService.overview(userId, startTime, endTime)));
     }
+
     @GetMapping("/category")
-    public ResponseEntity<Result> category(
-            @RequestParam("type")
-            Integer type,
-            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-            LocalDateTime startTime,
-            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-            LocalDateTime endTime) {
+    public ResponseEntity<Result> category(@RequestParam("type") Integer type,
+                                           @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+                                           LocalDateTime startTime,
+                                           @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+                                           LocalDateTime endTime) {
         Long userId = UserContext.getCurrentUserId();
         if (userId == null) {
             throw new BusinessException(Result.UNAUTHORIZED, "未登录或登录已过期");
         }
         return response(Result.SUCCESS, Result.success(statService.category(userId, type, startTime, endTime)));
+    }
+
+    @GetMapping("/monthly")
+    public ResponseEntity<Result> monthly(@RequestParam("year") Integer year) {
+        Long userId = UserContext.getCurrentUserId();
+        if (userId == null) {
+            throw new BusinessException(Result.UNAUTHORIZED, "未登录或登录已过期");
+        }
+        return response(Result.SUCCESS, Result.success(statService.monthly(userId, year)));
+    }
+
+    @GetMapping("/budget")
+    public ResponseEntity<Result> budget(@RequestParam("cycle") Integer cycle,
+                                         @RequestParam(required = false) String time) {
+        Long userId = UserContext.getCurrentUserId();
+        if (userId == null) {
+            throw new BusinessException(Result.UNAUTHORIZED, "未登录或登录已过期");
+        }
+        return response(Result.SUCCESS, Result.success(statService.budget(userId, cycle, time)));
     }
 }
