@@ -31,4 +31,18 @@ public class StatController extends BaseController{
         }
         return response(Result.SUCCESS, Result.success(statService.overview(userId, startTime, endTime)));
     }
+    @GetMapping("/category")
+    public ResponseEntity<Result> category(
+            @RequestParam("type")
+            Integer type,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+            LocalDateTime startTime,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+            LocalDateTime endTime) {
+        Long userId = UserContext.getCurrentUserId();
+        if (userId == null) {
+            throw new BusinessException(Result.UNAUTHORIZED, "未登录或登录已过期");
+        }
+        return response(Result.SUCCESS, Result.success(statService.category(userId, type, startTime, endTime)));
+    }
 }

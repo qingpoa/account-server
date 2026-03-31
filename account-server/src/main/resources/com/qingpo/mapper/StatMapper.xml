@@ -15,4 +15,18 @@
           and record_time <![CDATA[ >= ]]> #{startTime}
           and record_time <![CDATA[ <= ]]> #{endTime}
     </select>
+    <select id="category" resultType="com.qingpo.pojo.stat.StatCategoryVO">
+        select
+        sc.name as categoryName,
+        coalesce(sum(b.amount), 0) as amount
+        from bill b
+        left join system_category sc on b.category_id = sc.id
+        where b.user_id = #{userId}
+        and b.type = #{type}
+        and b.is_deleted = 0
+        and b.record_time <![CDATA[ >= ]]> #{startTime}
+        and b.record_time <![CDATA[ <= ]]> #{endTime}
+        group by b.category_id, sc.name
+        order by amount desc
+    </select>
 </mapper>
