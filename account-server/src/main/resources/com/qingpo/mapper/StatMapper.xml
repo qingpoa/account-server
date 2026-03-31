@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.qingpo.mapper.StatMapper">
+
+    <select id="overview" resultType="com.qingpo.pojo.stat.StatOverviewVO">
+        select
+            coalesce(sum(case when type = 1 then amount else 0 end), 0) as totalIncome,
+            coalesce(sum(case when type = 2 then amount else 0 end), 0) as totalExpense,
+            count(1) as billCount
+        from bill
+        where user_id = #{userId}
+          and is_deleted = 0
+          and record_time <![CDATA[ >= ]]> #{startTime}
+          and record_time <![CDATA[ <= ]]> #{endTime}
+    </select>
+</mapper>

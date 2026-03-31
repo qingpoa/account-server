@@ -97,6 +97,9 @@ public class BillServiceImpl implements BillService {
             return;
         }
         Bill bill = billMapper.getById(id, userId);
+        if (bill == null) {
+            throw new BusinessException(Result.NOT_FOUND, "账单不存在");
+        }
         if (dto.getAmount() != null && dto.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new BusinessException(Result.BAD_REQUEST, "金额必须大于0");
         }
@@ -160,10 +163,6 @@ public class BillServiceImpl implements BillService {
 
 
     private static boolean isUnchanged(BillUpdateDTO dto, Bill bill) {
-        if (bill == null) {
-            throw new BusinessException(Result.NOT_FOUND, "账单不存在");
-        }
-
         Long targetCategoryId = dto.getCategoryId() != null ? dto.getCategoryId() : bill.getCategoryId();
         BigDecimal targetAmount = dto.getAmount() != null ? dto.getAmount() : bill.getAmount();
         String targetRemark = dto.getRemark() != null ? dto.getRemark() : bill.getRemark();
