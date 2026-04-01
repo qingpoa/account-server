@@ -1,6 +1,7 @@
 package com.qingpo.service;
 
 import com.qingpo.pojo.user.*;
+import org.springframework.web.multipart.MultipartFile;
 
 public interface UserService {
 
@@ -13,4 +14,6 @@ public interface UserService {
     void updatePassword(UserChangePassword ucp);
 
     void updateUserInfo(UserVO user);
+
+    String uploadAvatar(Long userId, MultipartFile file);
 }

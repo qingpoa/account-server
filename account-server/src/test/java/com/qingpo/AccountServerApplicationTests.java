@@ -12,4 +12,5 @@ class AccountServerApplicationTests {
     void contextLoads() {
         log.info("debug");
     }
+
 }

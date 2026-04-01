@@ -11,6 +11,7 @@ import com.qingpo.service.UserService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.bind.annotation.*;
 
 @Slf4j
@@ -94,5 +95,14 @@ public class UserController extends BaseController {
         user.setUserId((long) Math.toIntExact(userId));
         userService.updateUserInfo(user);
         return response(Result.SUCCESS, Result.success());
+    }
+
+    @PostMapping("/avatar")
+    public ResponseEntity<Result> uploadAvatar(@RequestParam("file") MultipartFile file) {
+        Long userId = UserContext.getCurrentUserId();
+        if (userId == null) {
+            throw new BusinessException(Result.UNAUTHORIZED, "未登录或登录已过期");
+        }
+        return response(Result.SUCCESS, Result.success(userService.uploadAvatar(userId, file)));
     }
 }

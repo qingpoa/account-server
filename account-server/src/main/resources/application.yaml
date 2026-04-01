@@ -6,6 +6,10 @@ spring:
     username: root
     password: 123456
     driver-class-name: com.mysql.cj.jdbc.Driver
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 5MB
 
 #mybatis相关配置
 mybatis:
@@ -18,3 +22,11 @@ server:
   servlet:
     context-path: /api/v1
   port: 8080
+
+aliyun:
+  oss:
+    endpoint: https://oss-cn-beijing.aliyuncs.com
+    bucket-name: account-server
+    access-key-id: ${ALIBABA_CLOUD_ACCESS_KEY_ID}
+    access-key-secret: ${ALIBABA_CLOUD_ACCESS_KEY_SECRET}
+    domain: https://account-server.oss-cn-beijing.aliyuncs.com

@@ -7,11 +7,13 @@ import com.qingpo.pojo.Result;
 import com.qingpo.pojo.user.*;
 import com.qingpo.service.UserService;
 import com.qingpo.utils.JwtUtils;
+import com.qingpo.utils.OssUtils;
 import com.qingpo.utils.PasswordUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -22,6 +24,9 @@ public class UserServiceImpl implements UserService {
 
     @Autowired
     private UserMapper userMapper;
+
+    @Autowired
+    private OssUtils ossUtils;
 
 
     @Override
@@ -130,6 +135,26 @@ public class UserServiceImpl implements UserService {
         if (rows == 0) {
             throw new BusinessException(Result.SERVER_ERROR, "更新用户信息失败");
         }
+    }
+
+    @Override
+    @OperationLog(module = "USER", type = "UPDATE")
+    public String uploadAvatar(Long userId, MultipartFile file) {
+        User dbUser = userMapper.getUserInfoById(userId);
+        if (dbUser == null) {
+            throw new BusinessException(Result.NOT_FOUND, "用户不存在");
+        }
+
+        String avatarUrl = ossUtils.upload(file);
+        UserVO userVO = new UserVO();
+        userVO.setUserId(userId);
+        userVO.setAvatar(avatarUrl);
+
+        int rows = userMapper.updateUserInfo(userVO);
+        if (rows == 0) {
+            throw new BusinessException(Result.SERVER_ERROR, "头像更新失败");
+        }
+        return avatarUrl;
     }
 
 

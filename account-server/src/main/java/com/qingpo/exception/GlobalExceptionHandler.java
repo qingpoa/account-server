@@ -9,6 +9,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @Slf4j
@@ -42,6 +43,14 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Result> handleNotFoundException(NoResourceFoundException e) {
         log.warn("资源不存在: {}", e.getMessage());
         return response(Result.NOT_FOUND, Result.error(Result.NOT_FOUND, "请求资源不存在"));
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<Result> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException e) {
+        log.warn("上传文件大小超出限制: {}", e.getMessage());
+        long maxSize = e.getMaxUploadSize();
+        String maxSizeMb = String.format("%.2f", maxSize / 1024.0 / 1024.0);
+        return response(Result.BAD_REQUEST, Result.error(Result.BAD_REQUEST, "上传文件大小超出"+maxSizeMb+"MB"));
     }
 
     @ExceptionHandler(Exception.class)
