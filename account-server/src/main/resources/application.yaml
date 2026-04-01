@@ -2,7 +2,7 @@ spring:
   application:
     name: account-service
   datasource:
-    url: jdbc:mysql://119.45.175.101:13306/account
+    url: jdbc:mysql://119.45.175.101:13306/account?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8
     username: root
     password: 123456
     driver-class-name: com.mysql.cj.jdbc.Driver

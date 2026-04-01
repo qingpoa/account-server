@@ -1,0 +1,6 @@
+.idea/
+*.iml
+
+deploy/*.jar
+deploy/*.tar
+deploy/Dockerfile
