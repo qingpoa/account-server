@@ -1,27 +1,31 @@
 package com.qingpo.service.impl;
 
+import com.alibaba.excel.EasyExcel;
 import com.qingpo.exception.BusinessException;
 import com.qingpo.mapper.BillMapper;
 import com.qingpo.pojo.Result;
+import com.qingpo.pojo.bill.BillExportVO;
 import com.qingpo.pojo.bill.BillListVO;
 import com.qingpo.pojo.bill.BillQueryDTO;
 import com.qingpo.service.ExportService;
 import jakarta.servlet.http.HttpServletResponse;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class ExportServiceImpl implements ExportService {
+
+    private static final DateTimeFormatter EXPORT_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
+    private static final DateTimeFormatter FILE_DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     @Autowired
     private BillMapper billMapper;
@@ -40,45 +44,48 @@ public class ExportServiceImpl implements ExportService {
         }
 
         List<BillListVO> list = billMapper.list(userId,dto);
-        String fileName = URLEncoder.encode("bill-export.xlsx", StandardCharsets.UTF_8);
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        List<BillExportVO> exportList = list.stream()
+                .map(bill -> new BillExportVO(
+                        bill.getId(),
+                        bill.getAmount(),
+                        bill.getType() == 1 ? "收入" : "支出",
+                        bill.getCategoryName() == null ? "" : bill.getCategoryName(),
+                        bill.getRemark() == null ? "" : bill.getRemark(),
+                        bill.getRecordTime() == null ? "" : bill.getRecordTime().format(formatter),
+                        bill.getIsAiGenerated() != null && bill.getIsAiGenerated() == 1 ? "是" : "否"
+                ))
+                .collect(Collectors.toList());
+
+        String rawFileName = buildExportFileName(dto);
+        String fileName = URLEncoder.encode(rawFileName, StandardCharsets.UTF_8).replaceAll("\\+", "%20");
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setCharacterEncoding("UTF-8");
-        response.setHeader("Content-Disposition", "attachment;filename=" + fileName);
-
-        Workbook workbook = new XSSFWorkbook();
-        Sheet sheet = workbook.createSheet("账单数据");
-        Row headerRow = sheet.createRow(0);
-        headerRow.createCell(0).setCellValue("账单ID");
-        headerRow.createCell(1).setCellValue("金额");
-        headerRow.createCell(2).setCellValue("类型");
-        headerRow.createCell(3).setCellValue("分类名称");
-        headerRow.createCell(4).setCellValue("备注");
-        headerRow.createCell(5).setCellValue("记录时间");
-        headerRow.createCell(6).setCellValue("是否AI生成");
-
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-
-        for (int i = 0; i < list.size(); i++) {
-            BillListVO bill = list.get(i);
-            Row row = sheet.createRow(i + 1);
-
-            row.createCell(0).setCellValue(bill.getId());
-            row.createCell(1).setCellValue(bill.getAmount().doubleValue());
-            row.createCell(2).setCellValue(bill.getType() == 1 ? "收入" : "支出");
-            row.createCell(3).setCellValue(bill.getCategoryName() == null ? "" : bill.getCategoryName());
-            row.createCell(4).setCellValue(bill.getRemark() == null ? "" : bill.getRemark());
-            row.createCell(5).setCellValue(
-                    bill.getRecordTime() == null ? "" : bill.getRecordTime().format(formatter)
-            );
-            row.createCell(6).setCellValue(
-                    bill.getIsAiGenerated() != null && bill.getIsAiGenerated() == 1 ? "是" : "否"
-            );
-        }
-        workbook.write(response.getOutputStream());
+        response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + fileName);
+        EasyExcel.write(response.getOutputStream(), BillExportVO.class)
+                .sheet("账单数据")
+                .doWrite(exportList);
         response.getOutputStream().flush();
-        workbook.close();
+    }
 
+    private String buildExportFileName(BillQueryDTO dto) {
+        List<String> parts = new ArrayList<>();
+        parts.add("bill-export");
 
+        if (dto.getType() != null) {
+            parts.add(dto.getType() == 1 ? "income" : "expense");
+        }
+        if (dto.getCategoryId() != null) {
+            parts.add("category-" + dto.getCategoryId());
+        }
+        if (dto.getStartTime() != null) {
+            parts.add("from-" + dto.getStartTime().format(FILE_DATE_FORMATTER));
+        }
+        if (dto.getEndTime() != null) {
+            parts.add("to-" + dto.getEndTime().format(FILE_DATE_FORMATTER));
+        }
 
+        parts.add(LocalDateTime.now().format(EXPORT_TIME_FORMATTER));
+        return String.join("_", parts) + ".xlsx";
     }
 }
