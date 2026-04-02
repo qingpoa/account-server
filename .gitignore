@@ -4,3 +4,4 @@
 deploy/*.jar
 deploy/*.tar
 deploy/Dockerfile
+gcm-diagnose.log
