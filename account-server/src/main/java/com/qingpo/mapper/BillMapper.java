@@ -12,8 +12,6 @@ import java.util.List;
 @Mapper
 public interface BillMapper {
 
-    Long count(@Param("userId") Long userId, @Param("dto") BillQueryDTO dto);
-
     Integer countCategoryById(@Param("categoryId") Long categoryId);
 
     SystemCategory getCategoryById(@Param("categoryId") Long categoryId);
@@ -29,9 +27,7 @@ public interface BillMapper {
     int insertBill(Bill bill);
 
     List<BillListVO> list(@Param("userId") Long userId,
-                          @Param("dto") BillQueryDTO dto,
-                          @Param("offset") Integer offset,
-                          @Param("pageSize") Integer pageSize);
+                          @Param("dto") BillQueryDTO dto);
 
     @Select("select id, user_id, category_id, amount, type," +
             " remark, record_time, is_ai_generated, create_time," +

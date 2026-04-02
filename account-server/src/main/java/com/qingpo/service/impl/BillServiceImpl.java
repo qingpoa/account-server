@@ -9,6 +9,8 @@ import com.qingpo.pojo.bill.*;
 import com.qingpo.pojo.budget.BudgetConfig;
 import com.qingpo.pojo.category.SystemCategory;
 import com.qingpo.service.BillService;
+import com.github.pagehelper.PageHelper;
+import com.github.pagehelper.PageInfo;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -37,9 +39,10 @@ public class BillServiceImpl implements BillService {
             throw new BusinessException(Result.BAD_REQUEST, "页码和页大小不能为空且必须大于0");
         if (dto.getType() != null && dto.getType() != 1 && dto.getType() != 2)
             throw new BusinessException(Result.BAD_REQUEST, "账单类型参数错误");
-        Long total = billMapper.count(userId, dto);
-        int offset = (dto.getPageNum() - 1) * dto.getPageSize();
-        return new PageResult<>(total, billMapper.list(userId, dto, offset, dto.getPageSize()));
+        PageHelper.startPage(dto.getPageNum(), dto.getPageSize());
+        List<BillListVO> list = billMapper.list(userId, dto);
+        PageInfo<BillListVO> pageInfo = new PageInfo<>(list);
+        return new PageResult<>(pageInfo.getTotal(), pageInfo.getList());
     }
 
     @OperationLog(module = "BILL", type = "INSERT")
