@@ -1,22 +1,26 @@
 package com.qingpo.service.impl;
 
+import com.qingpo.config.RedisConfig;
 import com.qingpo.exception.BusinessException;
 import com.qingpo.pojo.Result;
 import com.qingpo.service.AuthService;
-import com.qingpo.utils.JwtUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class AuthServiceImpl implements AuthService {
+
+    @Autowired
+    private StringRedisTemplate stringRedisTemplate;
 
     @Override
     public Long getUserIdByToken(String authorization) {
         if (authorization == null || authorization.isBlank()) {
             throw new BusinessException(Result.UNAUTHORIZED, "未登录或登录已过期");
         }
-
         String token = authorization.trim();
         if (token.regionMatches(true, 0, "Bearer ", 0, 7)) {
             token = token.substring(7).trim();
@@ -29,12 +33,16 @@ public class AuthServiceImpl implements AuthService {
         }
 
         try {
-            Map<String, Object> claims = JwtUtils.parseJwt(token);
-            Object userId = claims.get("userId");
-            if (!(userId instanceof Number number)) {
-                throw new BusinessException(Result.UNAUTHORIZED, "token无效");
+            String tokenKey = RedisConfig.LOGIN_USER_KEY + token;
+            String userId_str = stringRedisTemplate.opsForValue().get(tokenKey);
+            Long TTL = stringRedisTemplate.getExpire(tokenKey, TimeUnit.MINUTES);
+            if (userId_str == null) {
+                throw new BusinessException(Result.UNAUTHORIZED, "未登录或登录已过期");
             }
-            return number.longValue();
+            if (TTL < 30) {
+                stringRedisTemplate.expire(tokenKey, RedisConfig.LOGIN_USER_TTL, TimeUnit.HOURS);
+            }
+            return Long.parseLong(userId_str);
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {

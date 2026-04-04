@@ -1,6 +1,7 @@
 package com.qingpo.service.impl;
 
 import com.qingpo.annotation.OperationLog;
+import com.qingpo.config.RedisConfig;
 import com.qingpo.exception.BusinessException;
 import com.qingpo.mapper.UserMapper;
 import com.qingpo.pojo.Result;
@@ -9,14 +10,21 @@ import com.qingpo.service.UserService;
 import com.qingpo.utils.JwtUtils;
 import com.qingpo.utils.OssUtils;
 import com.qingpo.utils.PasswordUtils;
+import com.qingpo.utils.TokenUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
+
+import static com.qingpo.config.RedisConfig.LOGIN_USER_KEY;
+import static com.qingpo.config.RedisConfig.LOGIN_USER_TTL;
 
 @Slf4j
 @Service
@@ -28,6 +36,8 @@ public class UserServiceImpl implements UserService {
     @Autowired
     private OssUtils ossUtils;
 
+    @Autowired
+    private StringRedisTemplate stringRedisTemplate;
 
     @Override
     public UserVO getUserInfo(Long userId) {
@@ -62,10 +72,10 @@ public class UserServiceImpl implements UserService {
                     dbUser.getAvatar(),
                     dbUser.getEnableOverspendAlert()
             );
-            HashMap<String, Object> payload = new HashMap<>();
-            payload.put("userId", userVO.getUserId());
-            payload.put("username", userVO.getUsername());
-            String token = JwtUtils.generateJwt(payload);
+            String token = TokenUtils.generateToken(32);
+            String loginUserKey = LOGIN_USER_KEY + token;
+            stringRedisTemplate.opsForValue().set(loginUserKey, dbUser.getId().toString());
+            stringRedisTemplate.expire(loginUserKey,RedisConfig.LOGIN_USER_TTL, TimeUnit.HOURS);
             return new UserLoginV(Math.toIntExact(dbUser.getId()), token, userVO);
         }
         return null;
@@ -82,8 +92,6 @@ public class UserServiceImpl implements UserService {
             user.setNickname(user.getUsername());
         }
 
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("username", user.getUsername());
         user.setPassword(PasswordUtils.encode(user.getPassword()));
         try {
             userMapper.insertUser(user);
@@ -93,8 +101,9 @@ public class UserServiceImpl implements UserService {
         if (user.getId() == null) {
             throw new BusinessException(Result.SERVER_ERROR, "注册失败");
         }
-        payload.put("userId", user.getId());
-        String token = JwtUtils.generateJwt(payload);
+        String token = TokenUtils.generateToken(32);
+        stringRedisTemplate.opsForValue().set(LOGIN_USER_KEY + token, user.getId().toString());
+        stringRedisTemplate.expire(LOGIN_USER_KEY + token, RedisConfig.LOGIN_USER_TTL, TimeUnit.HOURS);
         return new UserRegisterVO(user.getId(), token);
 
     }
