@@ -1,6 +1,7 @@
 package com.qingpo.service.impl;
 
 import com.qingpo.annotation.OperationLog;
+import com.qingpo.context.UserContext;
 import com.qingpo.exception.BusinessException;
 import com.qingpo.mapper.UserMapper;
 import com.qingpo.pojo.Result;
@@ -174,6 +175,13 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(Result.SERVER_ERROR, "头像更新失败");
         }
         return avatarUrl;
+    }
+
+    @Override
+    public void logout(Long userId) {
+        String token = UserContext.getCurrentUserToken();
+        stringRedisTemplate.delete(LOGIN_USER_KEY + token);
+        stringRedisTemplate.opsForSet().remove(USER_TO_TOKEN_KEY + userId , token);
     }
 
     private void cleanupInvalidTokens(String userTokenKey) {

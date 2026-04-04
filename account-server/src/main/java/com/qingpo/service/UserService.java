@@ -16,4 +16,6 @@ public interface UserService {
     void updateUserInfo(UserVO user);
 
     String uploadAvatar(Long userId, MultipartFile file);
+
+    void logout(Long userId);
 }

@@ -59,6 +59,17 @@ public class UserController extends BaseController {
 
     }
 
+    //退出登录
+    @PostMapping("/logout")
+    public ResponseEntity<Result> logout() {
+        Long userId = UserContext.getCurrentUserId();
+        if (userId == null) {
+            throw new BusinessException(Result.UNAUTHORIZED, "未登录或登录已过期");
+        }
+        userService.logout(userId);
+        return response(Result.SUCCESS, Result.success());
+    }
+
 
     // 修改密码
     @PutMapping("/password")
