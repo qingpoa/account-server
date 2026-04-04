@@ -31,3 +31,6 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Generated docs
+docs/Redis接入实现文档.md

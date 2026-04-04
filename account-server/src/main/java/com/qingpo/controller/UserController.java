@@ -21,6 +21,7 @@ public class UserController extends BaseController {
 
     @Autowired
     private UserService userService;
+
     // 获取用户信息
     @GetMapping("/info")
     public ResponseEntity<Result> getUserInfo() {

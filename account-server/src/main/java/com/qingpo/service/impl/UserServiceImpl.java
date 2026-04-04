@@ -1,13 +1,11 @@
 package com.qingpo.service.impl;
 
 import com.qingpo.annotation.OperationLog;
-import com.qingpo.config.RedisConfig;
 import com.qingpo.exception.BusinessException;
 import com.qingpo.mapper.UserMapper;
 import com.qingpo.pojo.Result;
 import com.qingpo.pojo.user.*;
 import com.qingpo.service.UserService;
-import com.qingpo.utils.JwtUtils;
 import com.qingpo.utils.OssUtils;
 import com.qingpo.utils.PasswordUtils;
 import com.qingpo.utils.TokenUtils;
@@ -18,13 +16,10 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.time.Duration;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-import static com.qingpo.config.RedisConfig.LOGIN_USER_KEY;
-import static com.qingpo.config.RedisConfig.LOGIN_USER_TTL;
+import static com.qingpo.config.RedisConfig.*;
 
 @Slf4j
 @Service
@@ -74,8 +69,12 @@ public class UserServiceImpl implements UserService {
             );
             String token = TokenUtils.generateToken(32);
             String loginUserKey = LOGIN_USER_KEY + token;
+            String userTokenKey = USER_TO_TOKEN_KEY + dbUser.getId().toString();
+            cleanupInvalidTokens(userTokenKey);
             stringRedisTemplate.opsForValue().set(loginUserKey, dbUser.getId().toString());
-            stringRedisTemplate.expire(loginUserKey,RedisConfig.LOGIN_USER_TTL, TimeUnit.HOURS);
+            stringRedisTemplate.expire(loginUserKey, LOGIN_USER_TTL, TimeUnit.HOURS);
+            stringRedisTemplate.opsForSet().add(userTokenKey, token);
+            stringRedisTemplate.expire(userTokenKey, USER_TO_TOKEN_TTL, TimeUnit.HOURS);
             return new UserLoginV(Math.toIntExact(dbUser.getId()), token, userVO);
         }
         return null;
@@ -102,8 +101,12 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(Result.SERVER_ERROR, "注册失败");
         }
         String token = TokenUtils.generateToken(32);
+        String userTokenKey = USER_TO_TOKEN_KEY + user.getId().toString();
+        cleanupInvalidTokens(userTokenKey);
         stringRedisTemplate.opsForValue().set(LOGIN_USER_KEY + token, user.getId().toString());
-        stringRedisTemplate.expire(LOGIN_USER_KEY + token, RedisConfig.LOGIN_USER_TTL, TimeUnit.HOURS);
+        stringRedisTemplate.expire(LOGIN_USER_KEY + token, LOGIN_USER_TTL, TimeUnit.HOURS);
+        stringRedisTemplate.opsForSet().add(userTokenKey, token);
+        stringRedisTemplate.expire(userTokenKey, USER_TO_TOKEN_TTL, TimeUnit.HOURS);
         return new UserRegisterVO(user.getId(), token);
 
     }
@@ -131,6 +134,13 @@ public class UserServiceImpl implements UserService {
         if (rows == 0) {
             throw new BusinessException(Result.SERVER_ERROR, "修改密码失败");
         }
+        Set<String> tokens = stringRedisTemplate.opsForSet().members(USER_TO_TOKEN_KEY + ucp.getUserId());
+        if (tokens != null) {
+            for (String token : tokens) {
+                stringRedisTemplate.delete(LOGIN_USER_KEY + token);
+            }
+        }
+        stringRedisTemplate.delete(USER_TO_TOKEN_KEY + ucp.getUserId());
     }
 
     @Override
@@ -164,6 +174,19 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(Result.SERVER_ERROR, "头像更新失败");
         }
         return avatarUrl;
+    }
+
+    private void cleanupInvalidTokens(String userTokenKey) {
+        Set<String> tokens = stringRedisTemplate.opsForSet().members(userTokenKey);
+        if (tokens == null || tokens.isEmpty()) {
+            return;
+        }
+        for (String oldToken : tokens) {
+            Boolean exists = stringRedisTemplate.hasKey(LOGIN_USER_KEY + oldToken);
+            if (Boolean.FALSE.equals(exists)) {
+                stringRedisTemplate.opsForSet().remove(userTokenKey, oldToken);
+            }
+        }
     }
 
 

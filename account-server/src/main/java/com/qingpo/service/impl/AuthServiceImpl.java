@@ -1,6 +1,7 @@
 package com.qingpo.service.impl;
 
 import com.qingpo.config.RedisConfig;
+import com.qingpo.context.UserContext;
 import com.qingpo.exception.BusinessException;
 import com.qingpo.pojo.Result;
 import com.qingpo.service.AuthService;
@@ -41,7 +42,9 @@ public class AuthServiceImpl implements AuthService {
             }
             if (TTL < 30) {
                 stringRedisTemplate.expire(tokenKey, RedisConfig.LOGIN_USER_TTL, TimeUnit.HOURS);
+                stringRedisTemplate.expire(RedisConfig.USER_TO_TOKEN_KEY + userId_str, RedisConfig.USER_TO_TOKEN_TTL, TimeUnit.HOURS);
             }
+            UserContext.setCurrentUserToken(token);
             return Long.parseLong(userId_str);
         } catch (BusinessException e) {
             throw e;
