@@ -13,6 +13,7 @@ import com.qingpo.pojo.stat.StatMonthlyVO;
 import com.qingpo.pojo.stat.StatOverviewVO;
 import com.qingpo.service.StatService;
 import com.qingpo.utils.RedisUtils;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -32,6 +33,7 @@ import java.util.stream.Collectors;
 
 import static com.qingpo.config.RedisConfig.*;
 
+@Slf4j
 @Service
 public class StatServiceImpl implements StatService {
 
@@ -54,17 +56,26 @@ public class StatServiceImpl implements StatService {
         String cacheKey = STAT_OVERVIEW_KEY + userId + ":v" + version + ":default";
         StatOverviewVO overviewVO = new StatOverviewVO();
         if(startTime == null && endTime == null){
-            overviewVO = redisUtils.get(cacheKey, StatOverviewVO.class);
-            if (overviewVO != null) {
-                return overviewVO;
+            try {
+                overviewVO = redisUtils.get(cacheKey, StatOverviewVO.class);
+                if (overviewVO != null) {
+                    return overviewVO;
+                }
+            } catch (Exception e) {
+                log.warn("读取overview缓存失败, key={}", cacheKey, e);
             }
+
             startTime = LocalDate.now().withDayOfMonth(1).atStartOfDay();
             endTime = LocalDateTime.now();
             overviewVO = statMapper.overview(userId, startTime, endTime);
             if (overviewVO != null) {
                 overviewVO.setBalance(overviewVO.getTotalIncome().subtract(overviewVO.getTotalExpense()));
             }
-            redisUtils.set(cacheKey, overviewVO, STAT_CACHE_TTL, TimeUnit.MINUTES);
+            try {
+                redisUtils.set(cacheKey, overviewVO, STAT_CACHE_TTL, TimeUnit.MINUTES);
+            } catch (Exception e) {
+                log.warn("写入overview缓存失败, key={}", cacheKey, e);
+            }
             return overviewVO;
         }
         if (startTime == null) {
@@ -94,15 +105,23 @@ public class StatServiceImpl implements StatService {
         long version = getUserStatVersion(userId);
         String cacheKey = STAT_CATEGORY_KEY + userId + ":v" + version + ":" + type + ":default";
         if (startTime == null && endTime == null) {
-            List<StatCategoryVO> cache = redisUtils.get(cacheKey, new TypeReference<List<StatCategoryVO>>() {});
-            if (cache != null) {
-                return cache;
+            try {
+                List<StatCategoryVO> cache = redisUtils.get(cacheKey, new TypeReference<List<StatCategoryVO>>() {});
+                if (cache != null) {
+                    return cache;
+                }
+            } catch (Exception e) {
+                log.warn("读取category缓存失败, key={}", cacheKey, e);
             }
 
             startTime = LocalDate.now().withDayOfMonth(1).atStartOfDay();
             endTime = LocalDateTime.now();
             List<StatCategoryVO> list = buildCategoryStats(userId, type, startTime, endTime);
-            redisUtils.set(cacheKey, list, STAT_CACHE_TTL, TimeUnit.MINUTES);
+            try {
+                redisUtils.set(cacheKey, list, STAT_CACHE_TTL, TimeUnit.MINUTES);
+            } catch (Exception e) {
+                log.warn("写入category缓存失败, key={}", cacheKey, e);
+            }
             return list;
         }
 
@@ -146,9 +165,13 @@ public class StatServiceImpl implements StatService {
 
         long version = getUserStatVersion(userId);
         String cacheKey = STAT_MONTHLY_KEY + userId + ":v" + version + ":" + year;
-        List<StatMonthlyVO> cache = redisUtils.get(cacheKey, new TypeReference<List<StatMonthlyVO>>() {});
-        if (cache != null) {
-            return cache;
+        try {
+            List<StatMonthlyVO> cache = redisUtils.get(cacheKey, new TypeReference<List<StatMonthlyVO>>() {});
+            if (cache != null) {
+                return cache;
+            }
+        } catch (Exception e) {
+            log.warn("读取monthly缓存失败, key={}", cacheKey, e);
         }
 
         LocalDateTime startTime = LocalDate.of(year, 1, 1).atStartOfDay();
@@ -165,7 +188,11 @@ public class StatServiceImpl implements StatService {
                     new StatMonthlyVO(monthKey, BigDecimal.ZERO, BigDecimal.ZERO)
             ));
         }
-        redisUtils.set(cacheKey, result, STAT_CACHE_TTL, TimeUnit.MINUTES);
+        try {
+            redisUtils.set(cacheKey, result, STAT_CACHE_TTL, TimeUnit.MINUTES);
+        } catch (Exception e) {
+            log.warn("写入monthly缓存失败, key={}", cacheKey, e);
+        }
         return result;
     }
 
@@ -181,9 +208,13 @@ public class StatServiceImpl implements StatService {
         long version = getUserStatVersion(userId);
         String cacheTime = (time == null || time.isBlank()) ? "current" : time;
         String cacheKey = STAT_BUDGET_KEY + userId + ":v" + version + ":" + cycle + ":" + cacheTime;
-        List<StatBudgetVO> cache = redisUtils.get(cacheKey, new TypeReference<List<StatBudgetVO>>() {});
-        if (cache != null) {
-            return cache;
+        try {
+            List<StatBudgetVO> cache = redisUtils.get(cacheKey, new TypeReference<List<StatBudgetVO>>() {});
+            if (cache != null) {
+                return cache;
+            }
+        } catch (Exception e) {
+            log.warn("读取budget缓存失败, key={}", cacheKey, e);
         }
 
         LocalDateTime[] timeRange = resolveBudgetTimeRange(cycle, time);
@@ -223,7 +254,11 @@ public class StatServiceImpl implements StatService {
                     progress
             ));
         }
-        redisUtils.set(cacheKey, result, STAT_CACHE_TTL, TimeUnit.MINUTES);
+        try {
+            redisUtils.set(cacheKey, result, STAT_CACHE_TTL, TimeUnit.MINUTES);
+        } catch (Exception e) {
+            log.warn("写入budget缓存失败, key={}", cacheKey, e);
+        }
         return result;
     }
 
@@ -303,10 +338,16 @@ public class StatServiceImpl implements StatService {
     }
 
     private long getUserStatVersion(Long userId) {
-        String versionStr = redisUtils.get(USER_STAT_VERSION_KEY + userId);
-        if (versionStr == null || versionStr.isBlank()) {
+        String versionKey = USER_STAT_VERSION_KEY + userId;
+        try {
+            String versionStr = redisUtils.get(versionKey);
+            if (versionStr == null || versionStr.isBlank()) {
+                return 1L;
+            }
+            return Long.parseLong(versionStr);
+        } catch (Exception e) {
+            log.warn("读取用户统计缓存版本失败, key={}", versionKey, e);
             return 1L;
         }
-        return Long.parseLong(versionStr);
     }
 }
