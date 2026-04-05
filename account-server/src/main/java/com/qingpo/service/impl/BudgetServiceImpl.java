@@ -11,6 +11,7 @@ import com.qingpo.pojo.budget.BudgetSaveDTO;
 import com.qingpo.pojo.budget.BudgetSaveVO;
 import com.qingpo.pojo.budget.BudgetUsedVO;
 import com.qingpo.service.BudgetService;
+import com.qingpo.utils.RedisUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -20,13 +21,20 @@ import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+
+import static com.qingpo.config.RedisConfig.USER_STAT_VERSION_KEY;
 
 @Service
 public class BudgetServiceImpl implements BudgetService {
 
     @Autowired
     private BudgetMapper budgetMapper;
+
+    @Autowired
+    private RedisUtils redisUtils;
+
     @Override
     public List<BudgetListVO> list(Long userId, Integer cycle) {
         if (cycle != null && cycle != 1 && cycle != 2 && cycle != 3) {
@@ -157,6 +165,7 @@ public class BudgetServiceImpl implements BudgetService {
             if (rows == 0) {
                 throw new BusinessException(Result.SERVER_ERROR, "预算更新失败");
             }
+            bumpUserStatVersion(userId);
             return new BudgetSaveVO(existingBudget.getId());
         }
 
@@ -171,6 +180,7 @@ public class BudgetServiceImpl implements BudgetService {
         if (rows == 0 || budgetConfig.getId() == null) {
             throw new BusinessException(Result.SERVER_ERROR, "预算保存失败");
         }
+        bumpUserStatVersion(userId);
         return new BudgetSaveVO(budgetConfig.getId());
     }
 
@@ -187,6 +197,7 @@ public class BudgetServiceImpl implements BudgetService {
         int row = budgetMapper.delete(userId, id);
         if (row == 0)
             throw new BusinessException(Result.SERVER_ERROR, "预算删除失败");
+        bumpUserStatVersion(userId);
     }
 
     private LocalDateTime[] getCurrentCycleTimeRange(Integer budgetCycle) {
@@ -212,5 +223,11 @@ public class BudgetServiceImpl implements BudgetService {
         }
 
         return new LocalDateTime[]{startDate.atStartOfDay(), endDate.atStartOfDay()};
+    }
+
+    private void bumpUserStatVersion(Long userId) {
+        String versionKey = USER_STAT_VERSION_KEY + userId;
+        redisUtils.increment(versionKey);
+        redisUtils.expire(versionKey, 30, TimeUnit.DAYS);
     }
 }

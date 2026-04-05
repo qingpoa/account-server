@@ -9,6 +9,7 @@ import com.qingpo.pojo.bill.*;
 import com.qingpo.pojo.budget.BudgetConfig;
 import com.qingpo.pojo.category.SystemCategory;
 import com.qingpo.service.BillService;
+import com.qingpo.utils.RedisUtils;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,12 +21,18 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
+
+import static com.qingpo.config.RedisConfig.USER_STAT_VERSION_KEY;
 
 @Service
 public class BillServiceImpl implements BillService {
 
     @Autowired
     private BillMapper billMapper;
+
+    @Autowired
+    private RedisUtils redisUtils;
 
 
     @Override
@@ -83,6 +90,8 @@ public class BillServiceImpl implements BillService {
         if (rows == 0 || bill.getId() == null)
             throw new BusinessException(Result.SERVER_ERROR, "新增账单失败");
 
+        bumpUserStatVersion(userId);
+
         String overspendAlert = buildOverspendAlert(userId, category, bill);
         return new BillSaveVO(bill.getId(), overspendAlert);
     }
@@ -124,6 +133,7 @@ public class BillServiceImpl implements BillService {
             throw new BusinessException(Result.SERVER_ERROR, "更新账单失败");
         }
 
+        bumpUserStatVersion(userId);
 
     }
 
@@ -146,6 +156,8 @@ public class BillServiceImpl implements BillService {
         if (rows == 0) {
             throw new BusinessException(Result.SERVER_ERROR, "账单删除失败");
         }
+
+        bumpUserStatVersion(userId);
 
     }
 
@@ -254,5 +266,11 @@ public class BillServiceImpl implements BillService {
             case 3 -> "年度";
             default -> "未知周期";
         };
+    }
+
+    private void bumpUserStatVersion(Long userId) {
+        String versionKey = USER_STAT_VERSION_KEY + userId;
+        redisUtils.increment(versionKey);
+        redisUtils.expire(versionKey, 30, TimeUnit.DAYS);
     }
 }

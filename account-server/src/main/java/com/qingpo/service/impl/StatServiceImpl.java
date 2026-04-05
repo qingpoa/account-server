@@ -1,5 +1,6 @@
 package com.qingpo.service.impl;
 
+import cn.hutool.core.lang.TypeReference;
 import com.qingpo.exception.BusinessException;
 import com.qingpo.mapper.BudgetMapper;
 import com.qingpo.mapper.StatMapper;
@@ -11,6 +12,7 @@ import com.qingpo.pojo.stat.StatCategoryVO;
 import com.qingpo.pojo.stat.StatMonthlyVO;
 import com.qingpo.pojo.stat.StatOverviewVO;
 import com.qingpo.service.StatService;
+import com.qingpo.utils.RedisUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -25,7 +27,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+
+import static com.qingpo.config.RedisConfig.*;
 
 @Service
 public class StatServiceImpl implements StatService {
@@ -38,11 +43,30 @@ public class StatServiceImpl implements StatService {
     @Autowired
     private BudgetMapper budgetMapper;
 
+    @Autowired
+    private RedisUtils redisUtils;
+
     @Override
     public StatOverviewVO overview(Long userId, LocalDateTime startTime, LocalDateTime endTime) {
         if (userId == null)
             throw new BusinessException(Result.UNAUTHORIZED, "未登录或登录已过期");
-
+        long version = getUserStatVersion(userId);
+        String cacheKey = STAT_OVERVIEW_KEY + userId + ":v" + version + ":default";
+        StatOverviewVO overviewVO = new StatOverviewVO();
+        if(startTime == null && endTime == null){
+            overviewVO = redisUtils.get(cacheKey, StatOverviewVO.class);
+            if (overviewVO != null) {
+                return overviewVO;
+            }
+            startTime = LocalDate.now().withDayOfMonth(1).atStartOfDay();
+            endTime = LocalDateTime.now();
+            overviewVO = statMapper.overview(userId, startTime, endTime);
+            if (overviewVO != null) {
+                overviewVO.setBalance(overviewVO.getTotalIncome().subtract(overviewVO.getTotalExpense()));
+            }
+            redisUtils.set(cacheKey, overviewVO, STAT_CACHE_TTL, TimeUnit.MINUTES);
+            return overviewVO;
+        }
         if (startTime == null) {
             startTime = LocalDate.now().withDayOfMonth(1).atStartOfDay();
         }
@@ -52,11 +76,10 @@ public class StatServiceImpl implements StatService {
         if (startTime.isAfter(endTime)) {
             throw new BusinessException(Result.BAD_REQUEST, "开始时间不能晚于结束时间");
         }
-        StatOverviewVO overviewVO = statMapper.overview(userId, startTime, endTime);
+        overviewVO = statMapper.overview(userId, startTime, endTime);
         if (overviewVO != null) {
             overviewVO.setBalance(overviewVO.getTotalIncome().subtract(overviewVO.getTotalExpense()));
         }
-
         return overviewVO;
     }
 
@@ -68,6 +91,21 @@ public class StatServiceImpl implements StatService {
             throw new BusinessException(Result.BAD_REQUEST, "统计类型参数错误");
         }
 
+        long version = getUserStatVersion(userId);
+        String cacheKey = STAT_CATEGORY_KEY + userId + ":v" + version + ":" + type + ":default";
+        if (startTime == null && endTime == null) {
+            List<StatCategoryVO> cache = redisUtils.get(cacheKey, new TypeReference<List<StatCategoryVO>>() {});
+            if (cache != null) {
+                return cache;
+            }
+
+            startTime = LocalDate.now().withDayOfMonth(1).atStartOfDay();
+            endTime = LocalDateTime.now();
+            List<StatCategoryVO> list = buildCategoryStats(userId, type, startTime, endTime);
+            redisUtils.set(cacheKey, list, STAT_CACHE_TTL, TimeUnit.MINUTES);
+            return list;
+        }
+
         if (startTime == null) {
             startTime = LocalDate.now().withDayOfMonth(1).atStartOfDay();
         }
@@ -78,6 +116,10 @@ public class StatServiceImpl implements StatService {
             throw new BusinessException(Result.BAD_REQUEST, "开始时间不能晚于结束时间");
         }
 
+        return buildCategoryStats(userId, type, startTime, endTime);
+    }
+
+    private List<StatCategoryVO> buildCategoryStats(Long userId, Integer type, LocalDateTime startTime, LocalDateTime endTime) {
         List<StatCategoryVO> list = statMapper.category(userId, type, startTime, endTime);
         if (list != null && !list.isEmpty()) {
             BigDecimal total = list.stream().map(StatCategoryVO::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -102,6 +144,13 @@ public class StatServiceImpl implements StatService {
             throw new BusinessException(Result.BAD_REQUEST, "统计年份参数错误");
         }
 
+        long version = getUserStatVersion(userId);
+        String cacheKey = STAT_MONTHLY_KEY + userId + ":v" + version + ":" + year;
+        List<StatMonthlyVO> cache = redisUtils.get(cacheKey, new TypeReference<List<StatMonthlyVO>>() {});
+        if (cache != null) {
+            return cache;
+        }
+
         LocalDateTime startTime = LocalDate.of(year, 1, 1).atStartOfDay();
         LocalDateTime endTime = startTime.plusYears(1);
         List<StatMonthlyVO> dbList = statMapper.monthly(userId, startTime, endTime);
@@ -116,6 +165,7 @@ public class StatServiceImpl implements StatService {
                     new StatMonthlyVO(monthKey, BigDecimal.ZERO, BigDecimal.ZERO)
             ));
         }
+        redisUtils.set(cacheKey, result, STAT_CACHE_TTL, TimeUnit.MINUTES);
         return result;
     }
 
@@ -126,6 +176,14 @@ public class StatServiceImpl implements StatService {
         }
         if (cycle == null || (cycle != 1 && cycle != 2 && cycle != 3)) {
             throw new BusinessException(Result.BAD_REQUEST, "预算周期参数错误");
+        }
+
+        long version = getUserStatVersion(userId);
+        String cacheTime = (time == null || time.isBlank()) ? "current" : time;
+        String cacheKey = STAT_BUDGET_KEY + userId + ":v" + version + ":" + cycle + ":" + cacheTime;
+        List<StatBudgetVO> cache = redisUtils.get(cacheKey, new TypeReference<List<StatBudgetVO>>() {});
+        if (cache != null) {
+            return cache;
         }
 
         LocalDateTime[] timeRange = resolveBudgetTimeRange(cycle, time);
@@ -165,6 +223,7 @@ public class StatServiceImpl implements StatService {
                     progress
             ));
         }
+        redisUtils.set(cacheKey, result, STAT_CACHE_TTL, TimeUnit.MINUTES);
         return result;
     }
 
@@ -241,5 +300,13 @@ public class StatServiceImpl implements StatService {
         }
 
         return new LocalDateTime[]{startDate.atStartOfDay(), endDate.atStartOfDay()};
+    }
+
+    private long getUserStatVersion(Long userId) {
+        String versionStr = redisUtils.get(USER_STAT_VERSION_KEY + userId);
+        if (versionStr == null || versionStr.isBlank()) {
+            return 1L;
+        }
+        return Long.parseLong(versionStr);
     }
 }
