@@ -19,6 +19,9 @@ public class LoginCheckInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull Object handler) {
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            return true;
+        }
         String authorization = request.getHeader("Authorization");
         if (authorization == null || authorization.isBlank()) {
             authorization = request.getHeader("token");
