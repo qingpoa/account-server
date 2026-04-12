@@ -165,6 +165,7 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(Result.NOT_FOUND, "用户不存在");
         }
 
+        String oldAvatar = dbUser.getAvatar();
         String avatarUrl = ossUtils.upload(file);
         UserVO userVO = new UserVO();
         userVO.setUserId(userId);
@@ -172,7 +173,11 @@ public class UserServiceImpl implements UserService {
 
         int rows = userMapper.updateUserInfo(userVO);
         if (rows == 0) {
+            ossUtils.delete(avatarUrl);
             throw new BusinessException(Result.SERVER_ERROR, "头像更新失败");
+        }
+        if (oldAvatar != null && !oldAvatar.equals(avatarUrl)) {
+            ossUtils.delete(oldAvatar);
         }
         return avatarUrl;
     }

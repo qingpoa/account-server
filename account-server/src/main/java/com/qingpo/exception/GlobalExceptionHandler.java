@@ -2,6 +2,7 @@ package com.qingpo.exception;
 
 import com.qingpo.pojo.Result;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -15,6 +16,9 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @Value("${spring.servlet.multipart.max-file-size:5MB}")
+    private String maxFileSizeConfig;
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<Result> handleBusinessException(BusinessException e) {
@@ -49,8 +53,10 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Result> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException e) {
         log.warn("上传文件大小超出限制: {}", e.getMessage());
         long maxSize = e.getMaxUploadSize();
-        String maxSizeMb = String.format("%.2f", maxSize / 1024.0 / 1024.0);
-        return response(Result.BAD_REQUEST, Result.error(Result.BAD_REQUEST, "上传文件大小超出"+maxSizeMb+"MB"));
+        String limitText = maxSize > 0
+                ? String.format("%.2fMB", maxSize / 1024.0 / 1024.0)
+                : maxFileSizeConfig;
+        return response(Result.BAD_REQUEST, Result.error(Result.BAD_REQUEST, "上传文件大小超出" + limitText));
     }
 
     @ExceptionHandler(Exception.class)
