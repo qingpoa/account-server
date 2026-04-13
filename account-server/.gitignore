@@ -34,3 +34,7 @@ build/
 
 # Generated docs
 docs/Redis接入实现文档.md
+
+# Private environment configs
+src/main/resources/application-dev-private.yaml
+src/main/resources/application-prod-private.yaml

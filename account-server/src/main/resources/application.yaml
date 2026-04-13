@@ -1,15 +1,31 @@
 spring:
   application:
     name: account-service
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  config:
+    import: optional:classpath:application-${spring.profiles.active}-private.yaml
   datasource:
-    url: jdbc:mysql://119.45.175.101:13306/account?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8
-    username: root
-    password: 123456
+    url: jdbc:mysql://${app.datasource.host}:${app.datasource.port}/${app.datasource.name}?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8
+    username: ${app.datasource.username}
+    password: ${app.datasource.password}
     driver-class-name: com.mysql.cj.jdbc.Driver
   servlet:
     multipart:
       max-file-size: 5MB
       max-request-size: 5MB
+  data:
+    redis:
+      host: ${app.redis.host}
+      port: ${app.redis.port}
+      password: ${app.redis.password:}
+      database: ${app.redis.database:0}
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+          max-wait: 1000ms
 
 #mybatis相关配置
 mybatis:
