@@ -1,0 +1,49 @@
+{
+  "bills": [
+    {
+      "id": "11bd9ec5d4314970a3f0f026a63a8c11",
+      "amount": 28.0,
+      "kind": "expense",
+      "category": "餐饮",
+      "note": "午饭",
+      "occurred_at": "2026-04-19T03:12:48",
+      "created_at": "2026-04-19T03:12:48"
+    },
+    {
+      "id": "5bc90264607e402cae3ffcb3ab2f6965",
+      "amount": 3000.0,
+      "kind": "income",
+      "category": "工资",
+      "note": "工资收入",
+      "occurred_at": "2026-04-19T03:13:19",
+      "created_at": "2026-04-19T03:13:19"
+    },
+    {
+      "id": "234f0b5783e14a1fa47b745f7756d8d6",
+      "amount": 2000.0,
+      "kind": "income",
+      "category": "工资",
+      "note": "发工资",
+      "occurred_at": "2026-04-19T03:20:19",
+      "created_at": "2026-04-19T03:20:19"
+    },
+    {
+      "id": "5e021b5ef28344fc98f25f266ef86213",
+      "amount": 50.0,
+      "kind": "expense",
+      "category": "餐饮",
+      "note": "吃饭",
+      "occurred_at": "2026-04-19T03:20:23",
+      "created_at": "2026-04-19T03:20:23"
+    },
+    {
+      "id": "6d2965ac2dad4c94bfb7c1afef237061",
+      "amount": 200.0,
+      "kind": "expense",
+      "category": "其他",
+      "note": "特殊支出",
+      "occurred_at": "2026-04-19T03:22:50",
+      "created_at": "2026-04-19T03:22:50"
+    }
+  ]
+}
