@@ -52,6 +52,7 @@ public class OssUtils {
             throw new BusinessException(Result.SERVER_ERROR, "文件上传失败");
         }
 
+
         return ossProperties.getDomain() + "/" + objectName;
     }
 

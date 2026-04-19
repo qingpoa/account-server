@@ -1,11 +1,20 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import unittest
 from pathlib import Path
 from uuid import uuid4
 
+from langchain_core.language_models.fake_chat_models import FakeListChatModel
+from langchain_core.messages import HumanMessage
+
+from account_agent.graph import build_graph, create_local_agent
 from account_agent.service.ledger_service import LedgerService
 from account_agent.storage import JsonLedgerStore
+
+
+class ToolFriendlyFakeListChatModel(FakeListChatModel):
+    def bind_tools(self, tools, *, tool_choice=None, **kwargs):
+        return self
 
 
 class LedgerServiceTestCase(unittest.TestCase):
@@ -68,6 +77,26 @@ class LedgerServiceTestCase(unittest.TestCase):
         self.assertEqual(summary["total_amount"], 94.0)
         self.assertEqual(summary["by_category"]["交通"], 66.0)
         self.assertEqual(summary["by_category"]["餐饮"], 28.0)
+
+    def test_build_graph_for_deployment_success(self) -> None:
+        agent = build_graph(model=ToolFriendlyFakeListChatModel(responses=["部署入口可用"]))
+        result = agent.invoke({"messages": [HumanMessage(content="你好")]})
+
+        self.assertEqual(result["messages"][-1].content, "部署入口可用")
+
+    def test_build_graph_accepts_model_dict_success(self) -> None:
+        agent = build_graph(model={"model": "deepseek-chat", "temperature": 0})
+
+        self.assertEqual(type(agent).__name__, "CompiledStateGraph")
+
+    def test_create_local_agent_success(self) -> None:
+        agent = create_local_agent(model=ToolFriendlyFakeListChatModel(responses=["本地入口可用"]))
+        result = agent.invoke(
+            {"messages": [HumanMessage(content="你好")]},
+            config={"configurable": {"thread_id": "test-thread"}},
+        )
+
+        self.assertEqual(result["messages"][-1].content, "本地入口可用")
 
 
 if __name__ == "__main__":

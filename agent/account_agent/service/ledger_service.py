@@ -1,10 +1,11 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from collections import Counter, defaultdict
 from datetime import datetime
+from typing import Protocol
 from uuid import uuid4
 
-from account_agent.storage import BillRecord, SqliteLedgerStore
+from account_agent.storage import BillRecord
 
 
 VALID_KINDS = {"expense", "income"}
@@ -28,8 +29,14 @@ CATEGORY_ALIASES = {
 }
 
 
+class LedgerStore(Protocol):
+    def append_bill(self, bill: BillRecord) -> BillRecord: ...
+
+    def list_bills(self) -> list[BillRecord]: ...
+
+
 class LedgerService:
-    def __init__(self, store: SqliteLedgerStore) -> None:
+    def __init__(self, store: LedgerStore) -> None:
         self._store = store
 
     def add_bill(

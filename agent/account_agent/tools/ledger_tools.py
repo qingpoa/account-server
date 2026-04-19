@@ -6,13 +6,13 @@ from langchain_core.tools import tool
 
 from account_agent.config import get_settings
 from account_agent.service.ledger_service import LedgerService
-from account_agent.storage import SqliteLedgerStore
+from account_agent.storage import JsonLedgerStore
 
 
 @lru_cache(maxsize=1)
 def get_ledger_service() -> LedgerService:
     settings = get_settings()
-    return LedgerService(SqliteLedgerStore(settings.ledger_db_path))
+    return LedgerService(JsonLedgerStore(settings.ledger_path))
 
 
 @tool

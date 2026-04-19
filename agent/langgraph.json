@@ -1,0 +1,7 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "accounting_agent": "./account_agent/graph/builder.py:build_graph"
+  },
+  "env": "./.env"
+}

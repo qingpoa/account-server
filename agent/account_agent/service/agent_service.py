@@ -2,16 +2,16 @@ from __future__ import annotations
 
 from langchain_core.messages import HumanMessage
 
-from account_agent.graph import create_agent
+from account_agent.graph import create_local_agent
 
 
 class AccountingAgentService:
     def __init__(self, agent=None) -> None:
-        self._agent = agent or create_agent()
+        self._agent = agent or create_local_agent()
 
     @classmethod
     def create(cls, thread_id: str | None = None) -> "AccountingAgentService":
-        agent = create_agent()
+        agent = create_local_agent()
         return cls(agent=agent)
 
     def invoke(self, user_input: str, thread_id: str) -> dict[str, object]:

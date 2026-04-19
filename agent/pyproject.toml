@@ -11,12 +11,11 @@ requires-python = ">=3.10"
 dependencies = [
   "langchain>=1.2.15",
   "langchain-core>=1.2.30",
-  "langchain-deepseek>=1.0.1",
   "langchain-openai>=1.1.13",
   "langgraph>=1.1.6",
   "python-dotenv>=1.0.1",
   "langsmith>=0.7.0",
-  "langgraph-checkpoint-sqlite>=3.0.0",
+  "langgraph-cli[inmem]>=0.4.23",
 ]
 
 [project.scripts]
@@ -27,3 +26,8 @@ py-modules = ["main"]
 
 [tool.setuptools.packages.find]
 include = ["account_agent*"]
+
+[dependency-groups]
+dev = [
+    "langgraph-cli>=0.4.23",
+]
