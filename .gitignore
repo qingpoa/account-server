@@ -1,5 +1,6 @@
 .idea/
 *.iml
+tests_runtime/
 
 deploy/*.jar
 deploy/*.tar

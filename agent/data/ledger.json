@@ -73,40 +73,13 @@
       "created_at": "2026-04-19T15:08:21"
     },
     {
-      "id": "c29aa52cda734cffb14ba434980133d8",
-      "amount": 200.0,
+      "id": "3af3b86f51404e8c84c5a0541e08b29f",
+      "amount": 50.98,
       "kind": "expense",
-      "category": "餐饮",
-      "note": "吃饭",
-      "occurred_at": "2026-04-19T15:41:12",
-      "created_at": "2026-04-19T15:41:12"
-    },
-    {
-      "id": "d4f0b68906b34e9d866d732b00435454",
-      "amount": 10000.0,
-      "kind": "income",
-      "category": "其他",
-      "note": "捡钱",
-      "occurred_at": "2026-04-19T15:41:16",
-      "created_at": "2026-04-19T15:41:16"
-    },
-    {
-      "id": "db9b4aec07414a0b9b1abd88eda3acc1",
-      "amount": 3000.0,
-      "kind": "expense",
-      "category": "其他",
-      "note": "其他支出",
-      "occurred_at": "2026-04-19T15:41:20",
-      "created_at": "2026-04-19T15:41:20"
-    },
-    {
-      "id": "eeaed0223daf4a2cac7720e072e88640",
-      "amount": 20.0,
-      "kind": "expense",
-      "category": "餐饮",
-      "note": "吃饭",
-      "occurred_at": "2026-04-19T18:41:13",
-      "created_at": "2026-04-19T18:41:13"
+      "category": "购物",
+      "note": "虞城县际逗商贸行 - 洗涤洗洁精",
+      "occurred_at": "2024-04-07T00:00:00+00:00",
+      "created_at": "2026-04-20T01:14:56"
     }
   ]
 }

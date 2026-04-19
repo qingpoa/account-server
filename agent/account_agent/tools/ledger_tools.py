@@ -59,5 +59,9 @@ def summarize_bills(
     return {"ok": True, "summary": summary}
 
 
-def get_tools() -> list:
+def get_ledger_tools() -> list:
     return [add_bill, list_recent_bills, summarize_bills]
+
+
+def get_tools() -> list:
+    return get_ledger_tools()

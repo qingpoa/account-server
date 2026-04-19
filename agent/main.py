@@ -23,6 +23,7 @@ def main() -> int:
 
     try:
         from account_agent.service.agent_service import AccountingAgentService
+        from account_agent.config import get_settings
     except ModuleNotFoundError as exc:
         print(
             "Missing dependency or package: "
@@ -30,14 +31,15 @@ def main() -> int:
         )
         return 1
 
-    if not os.getenv("DEEPSEEK_API_KEY"):
-        print("DEEPSEEK_API_KEY is not set. Copy `.env.example` to `.env` and fill it first.")
+    if not get_settings().api_key:
+        print("ACCOUNT_AGENT_API_KEY is not set. Copy `.env.example` to `.env` and fill it first.")
         return 1
 
     service = AccountingAgentService()
 
     print("Accounting agent is ready. Type `exit` or `quit` to stop.")
     print(f"Thread id: {args.thread_id}")
+    print("Image accounting is available through LangSmith / Studio / API message attachments.")
 
     while True:
         try:

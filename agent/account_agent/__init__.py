@@ -1,1 +1,1 @@
-﻿"""Accounting agent package."""
+"""Accounting agent package."""

@@ -17,6 +17,11 @@ class Settings:
     model: str
     temperature: float
     ledger_path: Path
+    api_key: str | None
+    base_url: str | None
+    vision_model: str | None
+    vision_api_key: str | None
+    vision_base_url: str | None
     default_thread_id: str
     deepseek_api_key: str | None
     deepseek_base_url: str | None
@@ -41,9 +46,22 @@ def get_settings() -> Settings:
     )
 
     return Settings(
-        model=os.getenv("ACCOUNT_AGENT_MODEL", "deepseek-chat"),
+        model=os.getenv("ACCOUNT_AGENT_MODEL", "qwen3.5-flash"),
         temperature=float(os.getenv("ACCOUNT_AGENT_TEMPERATURE", "0")),
         ledger_path=ledger_path,
+        api_key=os.getenv("ACCOUNT_AGENT_API_KEY") or os.getenv("DEEPSEEK_API_KEY"),
+        base_url=os.getenv("ACCOUNT_AGENT_BASE_URL") or os.getenv("DEEPSEEK_BASE_URL"),
+        vision_model=os.getenv("ACCOUNT_AGENT_VISION_MODEL", "qwen3.5-flash"),
+        vision_api_key=(
+            os.getenv("ACCOUNT_AGENT_VISION_API_KEY")
+            or os.getenv("ACCOUNT_AGENT_API_KEY")
+            or os.getenv("DEEPSEEK_API_KEY")
+        ),
+        vision_base_url=(
+            os.getenv("ACCOUNT_AGENT_VISION_BASE_URL")
+            or os.getenv("ACCOUNT_AGENT_BASE_URL")
+            or os.getenv("DEEPSEEK_BASE_URL")
+        ),
         default_thread_id=os.getenv("ACCOUNT_AGENT_THREAD_ID", "demo-thread"),
         deepseek_api_key=os.getenv("DEEPSEEK_API_KEY"),
         deepseek_base_url=os.getenv("DEEPSEEK_BASE_URL"),

@@ -16,6 +16,7 @@ dependencies = [
   "python-dotenv>=1.0.1",
   "langsmith>=0.7.0",
   "langgraph-cli[inmem]>=0.4.23",
+  "ipython>=8.39.0",
 ]
 
 [project.scripts]

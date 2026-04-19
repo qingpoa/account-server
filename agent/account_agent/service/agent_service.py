@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from langchain_core.messages import HumanMessage
+from collections.abc import Sequence
+
+from langchain_core.messages import BaseMessage, HumanMessage
 
 from account_agent.graph import create_local_agent
 
@@ -14,10 +16,20 @@ class AccountingAgentService:
         agent = create_local_agent()
         return cls(agent=agent)
 
-    def invoke(self, user_input: str, thread_id: str) -> dict[str, object]:
+    def invoke_messages(
+        self,
+        messages: Sequence[BaseMessage],
+        thread_id: str,
+    ) -> dict[str, object]:
         return self._agent.invoke(
-            {"messages": [HumanMessage(content=user_input)]},
+            {"messages": list(messages)},
             config={"configurable": {"thread_id": thread_id}},
+        )
+
+    def invoke(self, user_input: str, thread_id: str) -> dict[str, object]:
+        return self.invoke_messages(
+            messages=[HumanMessage(content=user_input)],
+            thread_id=thread_id,
         )
 
     def chat(self, user_input: str, thread_id: str) -> str:

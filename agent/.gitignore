@@ -3,6 +3,7 @@
 .python-version
 .uv/
 .idea/
+.langgraph_api/
 .tmp/
 .pycache/
 __pycache__/
