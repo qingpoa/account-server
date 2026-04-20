@@ -62,6 +62,66 @@ class PendingBillCompletionModel(ToolFriendlyFakeListChatModel):
         return super().invoke(input, config=config, **kwargs)
 
 
+class TextAddBillReplyModel(ToolFriendlyFakeListChatModel):
+    def __init__(self) -> None:
+        super().__init__(responses=["unused"])
+        self._call_count = 0
+
+    def invoke(self, input, config=None, **kwargs):
+        self._call_count += 1
+        if self._call_count == 1:
+            return AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "add_bill",
+                        "args": {
+                            "amount": 2000,
+                            "kind": "income",
+                            "category": "工资",
+                            "note": "工资收入",
+                            "occurred_at": "2026-04-20T10:00:00",
+                        },
+                        "id": "call_text_add_bill",
+                        "type": "tool_call",
+                    }
+                ],
+            )
+        return AIMessage(
+            content="已为你记下一笔收入：2000.0 元，分类工资，时间 2026-04-20 10:00，备注 工资收入。如果需要，我还可以继续帮你查询最近流水或做分类统计。"
+        )
+
+
+class StubImageAnalysisService:
+    def __init__(self, result: dict[str, object]) -> None:
+        self.result = result
+        self.calls: list[dict[str, object]] = []
+
+    def analyze(
+        self,
+        *,
+        image_blocks: list[dict[str, object]],
+        user_text: str = "",
+    ) -> dict[str, object]:
+        self.calls.append(
+            {
+                "image_blocks": image_blocks,
+                "user_text": user_text,
+            }
+        )
+        return dict(self.result)
+
+
+class ExplodingImageAnalysisService:
+    def analyze(
+        self,
+        *,
+        image_blocks: list[dict[str, object]],
+        user_text: str = "",
+    ) -> dict[str, object]:
+        raise AssertionError("image analysis should not be called for text-only requests")
+
+
 class LedgerServiceTestCase(unittest.TestCase):
     def setUp(self) -> None:
         self.runtime_dir = ROOT_RUNTIME_DIR
@@ -160,6 +220,23 @@ class LedgerServiceTestCase(unittest.TestCase):
 
         self.assertEqual(result["messages"][-1].content, "本地入口可用")
 
+    def test_text_add_bill_uses_model_generated_receipt_reply(self) -> None:
+        self._reset_empty_ledger()
+        agent = create_local_agent(model=TextAddBillReplyModel())
+
+        result = agent.invoke(
+            {"messages": [HumanMessage(content="工资发了2000")]},
+            config={"configurable": {"thread_id": "text-add-thread"}},
+        )
+
+        store = JsonLedgerStore(self.ledger_path)
+        bills = store.list_bills()
+        self.assertEqual(len(bills), 1)
+        self.assertEqual(bills[0].kind, "income")
+        self.assertEqual(bills[0].category, "工资")
+        self.assertIn("已为你记下一笔收入", result["messages"][-1].content)
+        self.assertIn("2000.0 元", result["messages"][-1].content)
+
     def test_normalize_image_blocks_uses_openai_image_url_shape(self) -> None:
         image_base64 = base64.b64encode((FIXTURES_DIR / "restaurant_receipt.jpg").read_bytes()).decode("utf-8")
 
@@ -181,18 +258,21 @@ class LedgerServiceTestCase(unittest.TestCase):
 
     def test_image_auto_add_bill_success(self) -> None:
         self._reset_empty_ledger()
-        agent = create_local_agent(model=ToolFriendlyFakeListChatModel(responses=[self._analysis_json(
-            is_accounting_related=True,
-            image_kind="receipt",
-            raw_summary="麦当劳午餐小票",
-            bill_candidate={
-                "amount": 28,
-                "kind": "expense",
-                "category": "餐饮",
-                "note": "麦当劳午餐",
-                "occurred_at": "2026-04-19T12:10:00",
-            },
-        )]))
+        agent = create_local_agent(model=ToolFriendlyFakeListChatModel(responses=[
+            self._analysis_json(
+                is_accounting_related=True,
+                image_kind="receipt",
+                raw_summary="麦当劳午餐小票",
+                bill_candidate={
+                    "amount": 28,
+                    "kind": "expense",
+                    "category": "餐饮",
+                    "note": "麦当劳午餐",
+                    "occurred_at": "2026-04-19T12:10:00",
+                },
+            ),
+            "已为你记下一笔支出：28.0 元，分类餐饮，时间 2026-04-19 12:10，备注 麦当劳午餐。如果需要，我还可以继续帮你查询最近流水或做分类统计。",
+        ]))
 
         result = agent.invoke(
             {"messages": [self._receipt_image_message("帮我看看这张图并记账")]},
@@ -205,7 +285,9 @@ class LedgerServiceTestCase(unittest.TestCase):
         self.assertEqual(bills[0].amount, 28.0)
         self.assertEqual(bills[0].kind, "expense")
         self.assertEqual(bills[0].category, "餐饮")
-        self.assertIn("记账成功", result["messages"][-1].content)
+        self.assertIn("已为你记下一笔支出", result["messages"][-1].content)
+        self.assertIn("28.0 元", result["messages"][-1].content)
+        self.assertIn("时间 2026-04-19 12:10", result["messages"][-1].content)
 
     def test_image_irrelevant_does_not_add_bill(self) -> None:
         self._reset_empty_ledger()
@@ -254,18 +336,21 @@ class LedgerServiceTestCase(unittest.TestCase):
 
     def test_image_missing_fields_then_user_supplements_and_adds_bill(self) -> None:
         self._reset_empty_ledger()
-        agent = create_local_agent(model=PendingBillCompletionModel(responses=[self._analysis_json(
-            is_accounting_related=True,
-            image_kind="receipt",
-            raw_summary="打车订单截图，但没有明确金额",
-            bill_candidate={
-                "amount": None,
-                "kind": "expense",
-                "category": "交通",
-                "note": "滴滴打车",
-                "occurred_at": "2026-04-19T09:30:00",
-            },
-        )]))
+        agent = create_local_agent(model=PendingBillCompletionModel(responses=[
+            self._analysis_json(
+                is_accounting_related=True,
+                image_kind="receipt",
+                raw_summary="打车订单截图，但没有明确金额",
+                bill_candidate={
+                    "amount": None,
+                    "kind": "expense",
+                    "category": "交通",
+                    "note": "滴滴打车",
+                    "occurred_at": "2026-04-19T09:30:00",
+                },
+            ),
+            "已为你记下一笔支出：36.0 元，分类交通，时间 2026-04-19 09:30，备注 滴滴打车。如果需要，我还可以继续帮你查询最近流水或做分类统计。",
+        ]))
         thread_id = "image-fill-thread"
 
         first = agent.invoke(
@@ -284,22 +369,25 @@ class LedgerServiceTestCase(unittest.TestCase):
         self.assertEqual(len(bills), 1)
         self.assertEqual(bills[0].amount, 36.0)
         self.assertEqual(bills[0].category, "交通")
-        self.assertIn("记账成功", second["messages"][-1].content)
+        self.assertIn("已为你记下一笔支出", second["messages"][-1].content)
 
     def test_image_income_candidate_maps_to_income_bill(self) -> None:
         self._reset_empty_ledger()
-        agent = create_local_agent(model=ToolFriendlyFakeListChatModel(responses=[self._analysis_json(
-            is_accounting_related=True,
-            image_kind="income_proof",
-            raw_summary="工资到账短信截图",
-            bill_candidate={
-                "amount": 12000,
-                "kind": "income",
-                "category": "工资",
-                "note": "四月工资",
-                "occurred_at": "2026-04-19T09:00:00",
-            },
-        )]))
+        agent = create_local_agent(model=ToolFriendlyFakeListChatModel(responses=[
+            self._analysis_json(
+                is_accounting_related=True,
+                image_kind="income_proof",
+                raw_summary="工资到账短信截图",
+                bill_candidate={
+                    "amount": 12000,
+                    "kind": "income",
+                    "category": "工资",
+                    "note": "四月工资",
+                    "occurred_at": "2026-04-19T09:00:00",
+                },
+            ),
+            "已为你记下一笔收入：12000.0 元，分类工资，时间 2026-04-19 09:00，备注 四月工资。如果需要，我还可以继续帮你查询最近流水或做分类统计。",
+        ]))
 
         result = agent.invoke(
             {"messages": [self._receipt_image_message("帮我从图片里识别这笔收入")]},
@@ -311,7 +399,9 @@ class LedgerServiceTestCase(unittest.TestCase):
         self.assertEqual(len(bills), 1)
         self.assertEqual(bills[0].kind, "income")
         self.assertEqual(bills[0].category, "工资")
-        self.assertIn("记账成功", result["messages"][-1].content)
+        self.assertIn("已为你记下一笔收入", result["messages"][-1].content)
+        self.assertIn("12000.0 元", result["messages"][-1].content)
+        self.assertIn("时间 2026-04-19 09:00", result["messages"][-1].content)
 
     def test_image_analysis_requires_api_key(self) -> None:
         os.environ.pop("ACCOUNT_AGENT_VISION_MODEL", None)
@@ -332,6 +422,70 @@ class LedgerServiceTestCase(unittest.TestCase):
                 ],
                 user_text="帮我识别这张图",
             )
+
+    def test_text_request_does_not_call_image_analysis_service(self) -> None:
+        agent = create_local_agent(
+            model=ToolFriendlyFakeListChatModel(responses=["文本链路正常"]),
+            analysis_service=ExplodingImageAnalysisService(),
+        )
+
+        result = agent.invoke(
+            {"messages": [HumanMessage(content="查询最近 2 笔账单")]},
+            config={"configurable": {"thread_id": "text-only-thread"}},
+        )
+
+        self.assertEqual(result["messages"][-1].content, "文本链路正常")
+
+    def test_image_invalid_category_only_asks_question_without_real_fixture(self) -> None:
+        self._reset_empty_ledger()
+        analysis_service = StubImageAnalysisService(
+            {
+                "is_accounting_related": True,
+                "image_kind": "receipt",
+                "raw_summary": "便利店购物小票",
+                "bill_candidate": {
+                    "amount": 35.0,
+                    "kind": "expense",
+                    "category": None,
+                    "note": "便利店消费",
+                    "occurred_at": "2026-04-20T10:00:00",
+                },
+                "missing_fields": ["category"],
+            }
+        )
+        agent = create_local_agent(
+            model=ToolFriendlyFakeListChatModel(responses=["unused"]),
+            analysis_service=analysis_service,
+        )
+
+        result = agent.invoke(
+            {"messages": [self._inline_image_message("识别这张图并记账")]},
+            config={"configurable": {"thread_id": "image-invalid-category-thread"}},
+        )
+
+        store = JsonLedgerStore(self.ledger_path)
+        bills = store.list_bills()
+        self.assertEqual(len(bills), 0)
+        self.assertEqual(len(analysis_service.calls), 1)
+        self.assertIn("还缺少", result["messages"][-1].content)
+        self.assertIn("分类", result["messages"][-1].content)
+
+    def test_normalize_candidate_handles_string_and_negative_amount_without_image_file(self) -> None:
+        service = ImageAnalysisService(llm=object())
+
+        candidate = service._normalize_candidate(
+            {
+                "amount": "-28.6",
+                "kind": "expense",
+                "category": "food",
+                "note": "晚饭",
+                "occurred_at": "2026-04-20T19:30:00",
+            }
+        )
+
+        self.assertEqual(candidate["amount"], 28.6)
+        self.assertEqual(candidate["kind"], "expense")
+        self.assertEqual(candidate["category"], "餐饮")
 
     def _reset_empty_ledger(self) -> None:
         if self.ledger_path.exists():
@@ -369,6 +523,20 @@ class LedgerServiceTestCase(unittest.TestCase):
     @staticmethod
     def _receipt_image_message(text: str) -> HumanMessage:
         image_base64 = base64.b64encode((FIXTURES_DIR / "restaurant_receipt.jpg").read_bytes()).decode("utf-8")
+        return HumanMessage(
+            content=[
+                {"type": "text", "text": text},
+                {
+                    "type": "image",
+                    "base64": image_base64,
+                    "mime_type": "image/jpeg",
+                },
+            ]
+        )
+
+    @staticmethod
+    def _inline_image_message(text: str) -> HumanMessage:
+        image_base64 = base64.b64encode(b"fake-image-bytes").decode("utf-8")
         return HumanMessage(
             content=[
                 {"type": "text", "text": text},

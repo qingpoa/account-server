@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from collections.abc import Mapping, Sequence
 from uuid import uuid4
 
@@ -28,10 +29,27 @@ SYSTEM_PROMPT = """
 7. 当上下文里有一笔待补全的图片账单时，优先补齐它；只有 `amount`、`kind`、`category` 都齐全后才调用 `add_bill`。
 """.strip()
 
+IMAGE_REPLY_PROMPT = """
+你是记账系统的回执助手。
+
+请严格基于工具的真实结果生成最终回复，不要编造，不要补充工具结果里没有的信息，也不要再次调用工具。
+
+要求：
+1. 使用自然、简洁的中文。
+2. 明确说明这笔账已经记下。
+3. 尽量带上收支类型、金额、分类、时间、备注；没有的字段不要硬编。
+4. 控制在 1 到 2 句。
+5. 最后可以补一句：如果需要，我还可以继续帮你查询最近流水或做分类统计。
+""".strip()
+
 MISSING_FIELD_LABELS = {
     "amount": "金额",
     "kind": "收支类型",
     "category": "分类",
+}
+KIND_LABELS = {
+    "expense": "支出",
+    "income": "收入",
 }
 
 
@@ -44,6 +62,7 @@ def _build_model(model=None):
     default_kwargs = {
         "model": settings.model,
         "temperature": settings.temperature,
+        "timeout": settings.request_timeout,
         "api_key": settings.api_key,
         "base_url": settings.base_url or "https://dashscope.aliyuncs.com/compatible-mode/v1",
     }
@@ -147,12 +166,39 @@ def _format_image_add_success(tool_payload: Mapping[str, object]) -> str:
     bill = tool_payload.get("bill")
     if not isinstance(bill, Mapping):
         return "已根据图片内容完成记账。"
-    return (
-        "已根据图片内容记账成功："
-        f"{bill.get('kind')} {bill.get('amount')} 元，"
+    kind = str(bill.get("kind") or "").strip().lower()
+    kind_label = KIND_LABELS.get(kind, kind or "记账")
+    occurred_at = _format_bill_time(bill.get("occurred_at"))
+    note = str(bill.get("note") or "").strip()
+    detail = (
+        f"已为你记一笔{kind_label}：{bill.get('amount')} 元，"
         f"分类 {bill.get('category')}，"
-        f"时间 {bill.get('occurred_at')}。"
+        f"时间 {occurred_at}"
     )
+    if note:
+        detail = f"{detail}，备注 {note}"
+    return f"{detail}。如果需要，我还可以继续帮你查询最近流水或做分类统计。"
+
+
+def _format_bill_time(value: object) -> str:
+    if value in (None, ""):
+        return "未提供"
+
+    text = str(value).strip()
+    if not text:
+        return "未提供"
+
+    normalized = text.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return text
+
+    if parsed.second or parsed.microsecond:
+        return parsed.strftime("%Y-%m-%d %H:%M:%S")
+    if parsed.hour or parsed.minute:
+        return parsed.strftime("%Y-%m-%d %H:%M")
+    return parsed.strftime("%Y-%m-%d")
 
 
 def _assistant_context(state: AccountAgentState) -> list[SystemMessage]:
@@ -243,14 +289,30 @@ def create_agent(model=None, checkpointer=None, analysis_service: ImageAnalysisS
         return END
 
     def route_after_ledger(state: AccountAgentState):
-        if state.get("pending_bill_candidate"):
-            return "finalize_image_bill"
+        payload = _parse_tool_payload(state["messages"][-1].content)
+        if isinstance(payload.get("bill"), Mapping):
+            return "bill_reply_assistant"
         return "assistant"
 
-    def finalize_image_bill(state: AccountAgentState) -> dict[str, object]:
+    def bill_reply_assistant(state: AccountAgentState) -> dict[str, object]:
         payload = _parse_tool_payload(state["messages"][-1].content)
+        try:
+            response = base_llm.invoke(
+                [
+                    SystemMessage(content=IMAGE_REPLY_PROMPT),
+                    HumanMessage(
+                        content=(
+                            "请基于下面的工具真实结果，生成一条面向用户的记账确认回复：\n"
+                            f"{json.dumps(payload, ensure_ascii=False)}"
+                        )
+                    ),
+                ]
+            )
+            text = _message_to_text(response.content).strip()
+        except Exception:
+            text = ""
         return {
-            "messages": [AIMessage(content=_format_image_add_success(payload))],
+            "messages": [AIMessage(content=text or _format_image_add_success(payload))],
             "pending_bill_candidate": None,
         }
 
@@ -261,7 +323,7 @@ def create_agent(model=None, checkpointer=None, analysis_service: ImageAnalysisS
     graph.add_node("handle_image_analysis", handle_image_analysis)
     graph.add_node("assistant", assistant)
     graph.add_node("ledger_tools", ToolNode(ledger_tools))
-    graph.add_node("finalize_image_bill", finalize_image_bill)
+    graph.add_node("bill_reply_assistant", bill_reply_assistant)
 
     graph.add_edge(START, "classify_input")
     graph.add_conditional_edges(
@@ -284,9 +346,9 @@ def create_agent(model=None, checkpointer=None, analysis_service: ImageAnalysisS
     graph.add_conditional_edges(
         "ledger_tools",
         route_after_ledger,
-        {"finalize_image_bill": "finalize_image_bill", "assistant": "assistant"},
+        {"bill_reply_assistant": "bill_reply_assistant", "assistant": "assistant"},
     )
-    graph.add_edge("finalize_image_bill", END)
+    graph.add_edge("bill_reply_assistant", END)
 
     if checkpointer is not None and hasattr(checkpointer, "setup"):
         checkpointer.setup()

@@ -16,6 +16,7 @@ load_dotenv(PROJECT_ROOT / ".env")
 class Settings:
     model: str
     temperature: float
+    request_timeout: float
     ledger_path: Path
     api_key: str | None
     base_url: str | None
@@ -48,6 +49,7 @@ def get_settings() -> Settings:
     return Settings(
         model=os.getenv("ACCOUNT_AGENT_MODEL", "qwen3.5-flash"),
         temperature=float(os.getenv("ACCOUNT_AGENT_TEMPERATURE", "0")),
+        request_timeout=float(os.getenv("ACCOUNT_AGENT_REQUEST_TIMEOUT", "20")),
         ledger_path=ledger_path,
         api_key=os.getenv("ACCOUNT_AGENT_API_KEY") or os.getenv("DEEPSEEK_API_KEY"),
         base_url=os.getenv("ACCOUNT_AGENT_BASE_URL") or os.getenv("DEEPSEEK_BASE_URL"),

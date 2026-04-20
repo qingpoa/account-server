@@ -86,6 +86,7 @@ class ImageAnalysisService:
         self._llm = ChatOpenAI(
             model=model_name,
             temperature=0,
+            timeout=self._settings.request_timeout,
             api_key=api_key,
             base_url=base_url or "https://dashscope.aliyuncs.com/compatible-mode/v1",
             model_kwargs={"response_format": {"type": "json_object"}},
