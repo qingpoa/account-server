@@ -20,9 +20,6 @@ class Settings:
     ledger_path: Path
     api_key: str | None
     base_url: str | None
-    vision_model: str | None
-    vision_api_key: str | None
-    vision_base_url: str | None
     default_thread_id: str
     langchain_api_key: str | None
     langchain_project: str | None
@@ -30,6 +27,7 @@ class Settings:
 
 
 def _resolve_path(env_var: str, default_relative: str) -> Path:
+    """将配置路径解析为相对于项目根目录的绝对路径。"""
     path_str = os.getenv(env_var, default_relative)
     path = Path(path_str)
     if not path.is_absolute():
@@ -39,6 +37,7 @@ def _resolve_path(env_var: str, default_relative: str) -> Path:
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
+    """从环境变量加载并缓存运行配置。"""
     ledger_path = _resolve_path(
         "ACCOUNT_AGENT_LEDGER_PATH",
         os.getenv("ACCOUNT_AGENT_LEDGER_DB_PATH", "./data/ledger.json"),
@@ -51,15 +50,6 @@ def get_settings() -> Settings:
         ledger_path=ledger_path,
         api_key=os.getenv("ACCOUNT_AGENT_API_KEY") or os.getenv("DEEPSEEK_API_KEY"),
         base_url=os.getenv("ACCOUNT_AGENT_BASE_URL") or os.getenv("DEEPSEEK_BASE_URL"),
-        vision_model=os.getenv("ACCOUNT_AGENT_VISION_MODEL", "qwen3.5-flash"),
-        vision_api_key=(
-            os.getenv("ACCOUNT_AGENT_VISION_API_KEY")
-            or os.getenv("ACCOUNT_AGENT_API_KEY")
-        ),
-        vision_base_url=(
-            os.getenv("ACCOUNT_AGENT_VISION_BASE_URL")
-            or os.getenv("ACCOUNT_AGENT_BASE_URL")
-        ),
         default_thread_id=os.getenv("ACCOUNT_AGENT_THREAD_ID", "demo-thread"),
         langchain_api_key=os.getenv("LANGCHAIN_API_KEY"),
         langchain_project=os.getenv("LANGCHAIN_PROJECT", "accounting-agent"),

@@ -8,7 +8,7 @@ from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
 
 from account_agent.config import get_settings
-from account_agent.service.ledger_service import CATEGORY_ALIASES, VALID_KINDS
+from account_agent.service.analysis_models import BillCandidate, ImageAnalysisResult
 
 
 IMAGE_ANALYSIS_PROMPT = """
@@ -37,11 +37,11 @@ bill_candidate 字段：
 """.strip()
 
 JSON_BLOCK_PATTERN = re.compile(r"\{.*\}", re.DOTALL)
-CANONICAL_CATEGORIES = {"餐饮", "交通", "购物", "工资", "住房", "其他"}
 
 
 class ImageAnalysisService:
     def __init__(self, llm=None) -> None:
+        """创建图片分析服务，可选择注入外部模型。"""
         self._settings = get_settings()
         self._llm = llm
 
@@ -51,6 +51,7 @@ class ImageAnalysisService:
         image_blocks: Sequence[Mapping[str, object]],
         user_text: str = "",
     ) -> dict[str, object]:
+        """分析图片内容并返回结构化记账结果。"""
         normalized_blocks = self._normalize_image_blocks(image_blocks)
         if not normalized_blocks:
             raise ValueError("未检测到可识别的图片内容")
@@ -59,26 +60,32 @@ class ImageAnalysisService:
         if user_text.strip():
             prompt = f"{prompt}\n\n用户补充说明：{user_text.strip()}"
 
-        response = self._get_llm().invoke(
-            [
-                HumanMessage(
-                    content=[
-                        {"type": "text", "text": prompt},
-                        *normalized_blocks,
-                    ]
-                )
+        message = HumanMessage(
+            content=[
+                {"type": "text", "text": prompt},
+                *normalized_blocks,
             ]
         )
-        payload = self._parse_response(self._message_to_text(response.content))
-        return self._normalize_result(payload)
+        llm = self._get_llm()
+
+        if isinstance(llm, ChatOpenAI):
+            try:
+                result = llm.with_structured_output(ImageAnalysisResult).invoke([message])
+                return self._coerce_result(result)
+            except Exception:
+                pass
+
+        response = llm.invoke([message])
+        return self._coerce_result(response.content)
 
     def _get_llm(self):
+        """构建并缓存用于图片分析的多模态模型。"""
         if self._llm is not None:
             return self._llm
 
-        model_name = self._settings.vision_model or self._settings.model
-        api_key = self._settings.vision_api_key or self._settings.api_key
-        base_url = self._settings.vision_base_url or self._settings.base_url
+        model_name = self._settings.model
+        api_key = self._settings.api_key
+        base_url = self._settings.base_url
         if not api_key:
             raise ValueError(
                 "未配置 API Key。请在 .env 中填写 ACCOUNT_AGENT_API_KEY。"
@@ -89,7 +96,6 @@ class ImageAnalysisService:
             timeout=self._settings.request_timeout,
             api_key=api_key,
             base_url=base_url or "https://dashscope.aliyuncs.com/compatible-mode/v1",
-            model_kwargs={"response_format": {"type": "json_object"}},
         )
         return self._llm
 
@@ -97,6 +103,7 @@ class ImageAnalysisService:
     def _normalize_image_blocks(
         image_blocks: Sequence[Mapping[str, object]],
     ) -> list[dict[str, object]]:
+        """将支持的图片块形态转换为 OpenAI 兼容的 image_url 结构。"""
         normalized: list[dict[str, object]] = []
         for block in image_blocks:
             block_type = str(block.get("type", "")).lower()
@@ -153,96 +160,15 @@ class ImageAnalysisService:
         return normalized
 
     @staticmethod
-    def _parse_response(text: str) -> dict[str, object]:
-        stripped = text.strip()
-        if not stripped:
-            raise ValueError("图片分析模型没有返回结果")
-
-        try:
-            return json.loads(stripped)
-        except json.JSONDecodeError:
-            match = JSON_BLOCK_PATTERN.search(stripped)
-            if not match:
-                preview = stripped[:200]
-                raise ValueError(f"图片分析模型没有返回合法 JSON，原始输出片段：{preview}")
-            return json.loads(match.group(0))
-
-    def _normalize_result(self, payload: Mapping[str, object]) -> dict[str, object]:
-        is_accounting_related = bool(payload.get("is_accounting_related"))
-        raw_summary = str(payload.get("raw_summary") or "").strip()
-        image_kind = str(payload.get("image_kind") or "other").strip() or "other"
-        candidate = payload.get("bill_candidate")
-        normalized_candidate = self._normalize_candidate(candidate if isinstance(candidate, Mapping) else None)
-
-        if not is_accounting_related:
-            return {
-                "is_accounting_related": False,
-                "image_kind": image_kind,
-                "bill_candidate": None,
-                "missing_fields": [],
-                "raw_summary": raw_summary or "这张图片和记账无关。",
-            }
-
-        missing_fields = [
-            field
-            for field in ("amount", "kind", "category")
-            if not normalized_candidate or normalized_candidate.get(field) in (None, "")
-        ]
-
-        return {
-            "is_accounting_related": True,
-            "image_kind": image_kind,
-            "bill_candidate": normalized_candidate,
-            "missing_fields": missing_fields,
-            "raw_summary": raw_summary or (normalized_candidate or {}).get("note", ""),
-        }
-
-    def _normalize_candidate(self, candidate: Mapping[str, object] | None) -> dict[str, object] | None:
+    def _normalize_candidate(candidate: Mapping[str, object] | None) -> dict[str, object] | None:
+        """使用共享的 Pydantic 模型规范化账单候选数据。"""
         if candidate is None:
             return None
-
-        amount = candidate.get("amount")
-        normalized_amount: float | None
-        if amount in (None, ""):
-            normalized_amount = None
-        else:
-            try:
-                normalized_amount = round(abs(float(amount)), 2)
-            except (TypeError, ValueError):
-                normalized_amount = None
-            if normalized_amount == 0:
-                normalized_amount = None
-
-        raw_kind = candidate.get("kind")
-        normalized_kind = None
-        if raw_kind not in (None, ""):
-            kind = str(raw_kind).strip().lower()
-            if kind in VALID_KINDS:
-                normalized_kind = kind
-
-        raw_category = candidate.get("category")
-        normalized_category = None
-        if raw_category not in (None, ""):
-            category = str(raw_category).strip()
-            if category in CANONICAL_CATEGORIES:
-                normalized_category = category
-            else:
-                normalized_category = CATEGORY_ALIASES.get(category.lower())
-
-        note = str(candidate.get("note") or "").strip()
-        occurred_at = candidate.get("occurred_at")
-        normalized_occurred_at = None if occurred_at in (None, "") else str(occurred_at).strip()
-
-        return {
-            "amount": normalized_amount,
-            "kind": normalized_kind,
-            "category": normalized_category,
-            "note": note,
-            "occurred_at": normalized_occurred_at,
-        }
+        return BillCandidate.model_validate(candidate).model_dump()
 
     @staticmethod
     def _message_to_text(content: object) -> str:
+        """将模型消息内容拍平成纯文本。"""
         if isinstance(content, str):
             return content
         if isinstance(content, list):
@@ -254,3 +180,25 @@ class ImageAnalysisService:
                     parts.append(str(block.get("text", "")))
             return "\n".join(part for part in parts if part).strip()
         return str(content)
+
+    def _coerce_result(self, result: object) -> dict[str, object]:
+        """将结构化输出或 JSON 文本统一转成结果模型。"""
+        if isinstance(result, ImageAnalysisResult):
+            return result.model_dump()
+
+        if isinstance(result, Mapping):
+            return ImageAnalysisResult.model_validate(result).model_dump()
+
+        text = self._message_to_text(result).strip()
+        if not text:
+            raise ValueError("图片分析模型没有返回结果")
+
+        try:
+            return ImageAnalysisResult.model_validate_json(text).model_dump()
+        except Exception:
+            match = JSON_BLOCK_PATTERN.search(text)
+            if not match:
+                preview = text[:200]
+                raise ValueError(f"图片分析模型没有返回合法 JSON，原始输出片段：{preview}")
+            payload = json.loads(match.group(0))
+            return ImageAnalysisResult.model_validate(payload).model_dump()

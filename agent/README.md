@@ -131,10 +131,9 @@ curl -N -X POST http://127.0.0.1:8000/api/v1/chat/stream ^
 
 ## 推荐配置
 
-当前默认示例已经改成“一把 key 跑文本和视觉”：
+当前默认示例已经改成“一套模型配置同时跑文本和图片分析”：
 
-- 文本模型：`qwen3.5-flash`
-- 视觉模型：`qwen3.5-flash`
+- 统一模型：`qwen3.5-flash`
 - 接口：阿里百炼 OpenAI-compatible
 
 也就是说，通常你只需要在 `.env` 里填写：
@@ -143,7 +142,7 @@ curl -N -X POST http://127.0.0.1:8000/api/v1/chat/stream ^
 ACCOUNT_AGENT_API_KEY=你的百炼API Key
 ```
 
-默认就会同时用于文本模型和视觉模型。
+默认就会同时用于文本对话和图片分析。
 
 ## 多模态图片记账说明
 
@@ -152,17 +151,14 @@ ACCOUNT_AGENT_API_KEY=你的百炼API Key
 - 若图片无关：直接回复不记账
 - 若图片相关且 `amount`、`kind`、`category` 齐全：自动调用 `add_bill`
 - 若图片相关但关键信息不足：只追问缺失字段
-- 默认视觉模型示例是 `qwen3.5-flash`
-- 默认文本模型示例是 `qwen3.5-flash`
-- 默认情况下文本和视觉共用同一把 `ACCOUNT_AGENT_API_KEY`
-- 只有当你想让视觉模型走另一家服务时，才需要额外配置 `ACCOUNT_AGENT_VISION_API_KEY`
+- 默认文本和图片分析都使用 `ACCOUNT_AGENT_MODEL`
+- 默认文本和图片分析都使用同一把 `ACCOUNT_AGENT_API_KEY`
 
 ## 发布到 LangSmith 前
 
 - 确保仓库里包含 `langgraph.json`
 - 在 LangSmith 部署环境中至少配置 `ACCOUNT_AGENT_API_KEY`
 - 若你不使用默认百炼地址，再补充配置 `ACCOUNT_AGENT_BASE_URL`
-- 若多模态模型与主模型不同，补充配置 `ACCOUNT_AGENT_VISION_MODEL`、`ACCOUNT_AGENT_VISION_API_KEY`、`ACCOUNT_AGENT_VISION_BASE_URL`
 - 如需本地 tracing，可配置 `LANGCHAIN_TRACING_V2`、`LANGCHAIN_API_KEY`、`LANGCHAIN_PROJECT`
 - 生产部署时建议把账本存储替换为后端 API 或数据库，不要长期依赖本地文件
 

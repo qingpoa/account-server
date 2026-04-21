@@ -1,1 +1,1 @@
-﻿"""Tests for the accounting agent."""
+"""记账智能体测试集合。"""

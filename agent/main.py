@@ -8,6 +8,7 @@ load_dotenv()
 
 
 def build_parser() -> ArgumentParser:
+    """构建命令行参数解析器。"""
     parser = ArgumentParser(description="Accounting agent CLI")
     parser.add_argument(
         "--thread-id",
@@ -18,6 +19,7 @@ def build_parser() -> ArgumentParser:
 
 
 def main() -> int:
+    """运行本地交互式 CLI 入口。"""
     parser = build_parser()
     args = parser.parse_args()
 

@@ -14,10 +14,12 @@ class BillRecord:
     created_at: str
 
     def to_dict(self) -> dict[str, object]:
+        """将账单记录转换为普通字典。"""
         return asdict(self)
 
     @classmethod
     def from_dict(cls, data: dict[str, object]) -> "BillRecord":
+        """根据普通字典构建账单记录对象。"""
         return cls(
             id=str(data["id"]),
             amount=float(data["amount"]),

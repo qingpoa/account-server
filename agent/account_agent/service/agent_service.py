@@ -10,10 +10,12 @@ from account_agent.graph import create_local_agent
 
 class AccountingAgentService:
     def __init__(self, agent=None) -> None:
+        """创建一个围绕已编译 LangGraph 智能体的服务封装。"""
         self._agent = agent or create_local_agent()
 
     @classmethod
     def create(cls, thread_id: str | None = None) -> "AccountingAgentService":
+        """创建一个带本地智能体实例的服务对象。"""
         agent = create_local_agent()
         return cls(agent=agent)
 
@@ -22,18 +24,21 @@ class AccountingAgentService:
         messages: Sequence[BaseMessage],
         thread_id: str,
     ) -> dict[str, object]:
+        """使用显式消息列表调用智能体。"""
         return self._agent.invoke(
             {"messages": list(messages)},
             config={"configurable": {"thread_id": thread_id}},
         )
 
     def invoke(self, user_input: str, thread_id: str) -> dict[str, object]:
+        """使用单条用户文本消息调用智能体。"""
         return self.invoke_messages(
             messages=[HumanMessage(content=user_input)],
             thread_id=thread_id,
         )
 
     def chat(self, user_input: str, thread_id: str) -> str:
+        """返回单次用户输入对应的最终文本回复。"""
         result = self.invoke(user_input=user_input, thread_id=thread_id)
         message = result["messages"][-1]
         return self._message_to_text(message.content)
@@ -43,6 +48,7 @@ class AccountingAgentService:
         messages: Sequence[BaseMessage],
         thread_id: str,
     ) -> str:
+        """返回自定义消息序列对应的最终文本回复。"""
         result = self.invoke_messages(messages=messages, thread_id=thread_id)
         message = result["messages"][-1]
         return self._message_to_text(message.content)
@@ -52,6 +58,7 @@ class AccountingAgentService:
         messages: Sequence[BaseMessage],
         thread_id: str,
     ):
+        """将图执行过程转换为前端可消费的 SSE 事件流。"""
         yield {"type": "info", "content": "Agent 正在思考..."}
         for event in self._agent.stream(
             {"messages": list(messages)},
@@ -105,6 +112,7 @@ class AccountingAgentService:
                             }
 
     def get_history(self, thread_id: str) -> dict[str, object]:
+        """从图的 checkpoint 中读取指定线程的历史记录。"""
         snapshot = self._agent.get_state(
             {"configurable": {"thread_id": thread_id}},
         )
@@ -128,6 +136,7 @@ class AccountingAgentService:
 
     @staticmethod
     def _message_to_text(content: object) -> str:
+        """将消息内容块展开为纯文本。"""
         if isinstance(content, str):
             return content
         if isinstance(content, list):
@@ -143,6 +152,7 @@ class AccountingAgentService:
 
     @staticmethod
     def _message_role(message: BaseMessage) -> str | None:
+        """将 LangChain 消息类型映射为前端使用的角色名。"""
         if isinstance(message, HumanMessage):
             return "user"
         if isinstance(message, AIMessage):

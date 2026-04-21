@@ -21,3 +21,5 @@ build/
 *.egg-info
 .claude/
 data/*.db
+data/*.json
+

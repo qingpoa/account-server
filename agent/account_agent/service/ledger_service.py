@@ -30,13 +30,18 @@ CATEGORY_ALIASES = {
 
 
 class LedgerStore(Protocol):
-    def append_bill(self, bill: BillRecord) -> BillRecord: ...
+    def append_bill(self, bill: BillRecord) -> BillRecord:
+        """持久化一条账单记录。"""
+        ...
 
-    def list_bills(self) -> list[BillRecord]: ...
+    def list_bills(self) -> list[BillRecord]:
+        """返回所有已持久化的账单记录。"""
+        ...
 
 
 class LedgerService:
     def __init__(self, store: LedgerStore) -> None:
+        """基于给定存储实现创建账本服务。"""
         self._store = store
 
     def add_bill(
@@ -48,6 +53,7 @@ class LedgerService:
         note: str = "",
         occurred_at: str | None = None,
     ) -> dict[str, object]:
+        """校验并保存一条账单记录。"""
         normalized_kind = self._normalize_kind(kind)
         normalized_category = self._normalize_category(category)
         normalized_amount = self._normalize_amount(amount)
@@ -73,6 +79,7 @@ class LedgerService:
         kind: str | None = None,
         category: str | None = None,
     ) -> list[dict[str, object]]:
+        """按可选条件返回最近的账单列表。"""
         records = self._filter_bills(kind=kind, category=category)
         records.sort(key=lambda item: (item.occurred_at, item.created_at), reverse=True)
         safe_limit = max(1, limit)
@@ -84,6 +91,7 @@ class LedgerService:
         kind: str | None = None,
         category: str | None = None,
     ) -> dict[str, object]:
+        """按收支类型和分类汇总账单金额。"""
         records = self._filter_bills(kind=kind, category=category)
         by_kind: Counter[str] = Counter()
         by_category: defaultdict[str, float] = defaultdict(float)
@@ -110,6 +118,7 @@ class LedgerService:
         kind: str | None = None,
         category: str | None = None,
     ) -> list[BillRecord]:
+        """按收支类型和分类过滤已存储账单。"""
         records = self._store.list_bills()
         normalized_kind = self._normalize_kind(kind) if kind else None
         normalized_category = self._normalize_category(category) if category else None
@@ -123,6 +132,7 @@ class LedgerService:
 
     @staticmethod
     def _normalize_amount(amount: float) -> float:
+        """规范化并校验输入金额。"""
         normalized_amount = round(float(amount), 2)
         if normalized_amount <= 0:
             raise ValueError("amount must be a positive number")
@@ -130,6 +140,7 @@ class LedgerService:
 
     @staticmethod
     def _normalize_kind(kind: str | None) -> str:
+        """规范化并校验收入或支出类型。"""
         if kind is None:
             raise ValueError("kind is required")
         normalized_kind = kind.strip().lower()
@@ -139,6 +150,7 @@ class LedgerService:
 
     @staticmethod
     def _normalize_category(category: str | None) -> str:
+        """将分类规范化为支持的标准集合。"""
         if not category:
             return "其他"
 
@@ -154,6 +166,7 @@ class LedgerService:
 
     @staticmethod
     def _normalize_datetime(occurred_at: str | None) -> str:
+        """将发生时间规范化为秒级 ISO 格式。"""
         if not occurred_at:
             return datetime.now().isoformat(timespec="seconds")
         return datetime.fromisoformat(occurred_at.strip()).isoformat(timespec="seconds")

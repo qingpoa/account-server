@@ -8,12 +8,13 @@ from account_agent.service import ImageAnalysisService
 
 
 def get_analysis_tools(analysis_service: ImageAnalysisService) -> list:
+    """创建图中使用的图片分析工具集合。"""
     @tool
     def analyze_accounting_image(
         user_text: str = "",
         image_blocks: list[dict[str, object]] | None = None,
     ) -> dict[str, object]:
-        """Analyze image blocks and determine whether they are accounting-related."""
+        """分析图片块并判断其是否与记账相关。"""
         blocks = image_blocks or []
         normalized_blocks = [
             dict(block)

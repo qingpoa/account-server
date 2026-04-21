@@ -24,11 +24,13 @@ ROOT_RUNTIME_DIR = Path(__file__).resolve().parents[2] / "tests_runtime"
 
 class ToolFriendlyFakeListChatModel(FakeListChatModel):
     def bind_tools(self, tools, *, tool_choice=None, **kwargs):
+        """在绑定工具后直接返回假模型自身。"""
         return self
 
 
 class PendingBillCompletionModel(ToolFriendlyFakeListChatModel):
     def invoke(self, input, config=None, **kwargs):
+        """模拟在后续轮次中补全图片账单缺失字段。"""
         if isinstance(input, list):
             messages = input
             has_pending_context = any(
@@ -64,10 +66,12 @@ class PendingBillCompletionModel(ToolFriendlyFakeListChatModel):
 
 class TextAddBillReplyModel(ToolFriendlyFakeListChatModel):
     def __init__(self) -> None:
+        """准备一个先记账后返回回执回复的假模型。"""
         super().__init__(responses=["unused"])
         self._call_count = 0
 
     def invoke(self, input, config=None, **kwargs):
+        """第一次返回工具调用，第二次返回自然语言回执。"""
         self._call_count += 1
         if self._call_count == 1:
             return AIMessage(
@@ -94,6 +98,7 @@ class TextAddBillReplyModel(ToolFriendlyFakeListChatModel):
 
 class StubImageAnalysisService:
     def __init__(self, result: dict[str, object]) -> None:
+        """保存一份固定图片分析结果供测试复用。"""
         self.result = result
         self.calls: list[dict[str, object]] = []
 
@@ -103,6 +108,7 @@ class StubImageAnalysisService:
         image_blocks: list[dict[str, object]],
         user_text: str = "",
     ) -> dict[str, object]:
+        """记录分析调用并返回固定结果。"""
         self.calls.append(
             {
                 "image_blocks": image_blocks,
@@ -119,16 +125,18 @@ class ExplodingImageAnalysisService:
         image_blocks: list[dict[str, object]],
         user_text: str = "",
     ) -> dict[str, object]:
+        """一旦意外进入图片分析分支就立即失败。"""
         raise AssertionError("image analysis should not be called for text-only requests")
 
 
 class LedgerServiceTestCase(unittest.TestCase):
     def setUp(self) -> None:
+        """准备独立的 JSON 账本并写入测试样例数据。"""
         self.runtime_dir = ROOT_RUNTIME_DIR
         self.runtime_dir.mkdir(exist_ok=True)
         self.ledger_path = self.runtime_dir / f"ledger_{uuid4().hex}.json"
         os.environ["ACCOUNT_AGENT_LEDGER_PATH"] = str(self.ledger_path)
-        os.environ["ACCOUNT_AGENT_VISION_MODEL"] = "fake-vision-model"
+        os.environ["ACCOUNT_AGENT_MODEL"] = "fake-vision-model"
         get_settings.cache_clear()
         get_ledger_service.cache_clear()
 
@@ -156,16 +164,18 @@ class LedgerServiceTestCase(unittest.TestCase):
         )
 
     def tearDown(self) -> None:
+        """清理缓存配置并删除临时账本文件。"""
         get_settings.cache_clear()
         get_ledger_service.cache_clear()
         os.environ.pop("ACCOUNT_AGENT_LEDGER_PATH", None)
-        os.environ.pop("ACCOUNT_AGENT_VISION_MODEL", None)
+        os.environ.pop("ACCOUNT_AGENT_MODEL", None)
         os.environ.pop("ACCOUNT_AGENT_API_KEY", None)
         os.environ.pop("ACCOUNT_AGENT_BASE_URL", None)
         if self.ledger_path.exists():
             self.ledger_path.unlink()
 
     def test_add_bill_success(self) -> None:
+        """新增账单时应完成规范化并成功落盘。"""
         bill = self.service.add_bill(
             amount=18.5,
             kind="expense",
@@ -179,6 +189,7 @@ class LedgerServiceTestCase(unittest.TestCase):
         self.assertEqual(bill["amount"], 18.5)
 
     def test_list_recent_bills_success(self) -> None:
+        """最近账单应按时间倒序返回。"""
         recent = self.service.list_recent_bills(limit=2)
 
         self.assertEqual(len(recent), 2)
@@ -186,6 +197,7 @@ class LedgerServiceTestCase(unittest.TestCase):
         self.assertEqual(recent[1]["category"], "餐饮")
 
     def test_summarize_bills_success(self) -> None:
+        """支出汇总应按分类聚合金额。"""
         summary = self.service.summarize_bills(kind="expense")
 
         self.assertEqual(summary["count"], 2)
@@ -194,12 +206,14 @@ class LedgerServiceTestCase(unittest.TestCase):
         self.assertEqual(summary["by_category"]["餐饮"], 28.0)
 
     def test_build_graph_for_deployment_success(self) -> None:
+        """可部署图入口应能够成功调用。"""
         agent = build_graph(model=ToolFriendlyFakeListChatModel(responses=["部署入口可用"]))
         result = agent.invoke({"messages": [HumanMessage(content="你好")]})
 
         self.assertEqual(result["messages"][-1].content, "部署入口可用")
 
     def test_build_graph_accepts_model_dict_success(self) -> None:
+        """图构建函数应支持传入模型配置字典。"""
         agent = build_graph(
             model={
                 "model": "qwen3.5-flash",
@@ -212,6 +226,7 @@ class LedgerServiceTestCase(unittest.TestCase):
         self.assertEqual(type(agent).__name__, "CompiledStateGraph")
 
     def test_create_local_agent_success(self) -> None:
+        """本地图入口应能配合内存 checkpoint 正常工作。"""
         agent = create_local_agent(model=ToolFriendlyFakeListChatModel(responses=["本地入口可用"]))
         result = agent.invoke(
             {"messages": [HumanMessage(content="你好")]},
@@ -221,6 +236,7 @@ class LedgerServiceTestCase(unittest.TestCase):
         self.assertEqual(result["messages"][-1].content, "本地入口可用")
 
     def test_text_add_bill_uses_model_generated_receipt_reply(self) -> None:
+        """文本记账流程应返回模型生成的回执回复。"""
         self._reset_empty_ledger()
         agent = create_local_agent(model=TextAddBillReplyModel())
 
@@ -238,6 +254,7 @@ class LedgerServiceTestCase(unittest.TestCase):
         self.assertIn("2000.0 元", result["messages"][-1].content)
 
     def test_normalize_image_blocks_uses_openai_image_url_shape(self) -> None:
+        """图片块应规范化为 OpenAI 兼容的 image_url 结构。"""
         image_base64 = base64.b64encode((FIXTURES_DIR / "restaurant_receipt.jpg").read_bytes()).decode("utf-8")
 
         normalized = ImageAnalysisService._normalize_image_blocks(
@@ -257,6 +274,7 @@ class LedgerServiceTestCase(unittest.TestCase):
         )
 
     def test_image_auto_add_bill_success(self) -> None:
+        """图片账单候选信息完整时应自动入账。"""
         self._reset_empty_ledger()
         agent = create_local_agent(model=ToolFriendlyFakeListChatModel(responses=[
             self._analysis_json(
@@ -290,6 +308,7 @@ class LedgerServiceTestCase(unittest.TestCase):
         self.assertIn("时间 2026-04-19 12:10", result["messages"][-1].content)
 
     def test_image_irrelevant_does_not_add_bill(self) -> None:
+        """与记账无关的图片不应生成账单。"""
         self._reset_empty_ledger()
         agent = create_local_agent(model=ToolFriendlyFakeListChatModel(responses=[self._analysis_json(
             is_accounting_related=False,
@@ -309,6 +328,7 @@ class LedgerServiceTestCase(unittest.TestCase):
         self.assertIn("和记账无关", result["messages"][-1].content)
 
     def test_image_missing_fields_only_asks_question(self) -> None:
+        """图片账单缺关键字段时应触发追问。"""
         self._reset_empty_ledger()
         agent = create_local_agent(model=ToolFriendlyFakeListChatModel(responses=[self._analysis_json(
             is_accounting_related=True,
@@ -335,6 +355,7 @@ class LedgerServiceTestCase(unittest.TestCase):
         self.assertIn("金额", result["messages"][-1].content)
 
     def test_image_missing_fields_then_user_supplements_and_adds_bill(self) -> None:
+        """后续用户补充信息后应完成并保存待补全账单。"""
         self._reset_empty_ledger()
         agent = create_local_agent(model=PendingBillCompletionModel(responses=[
             self._analysis_json(
@@ -372,6 +393,7 @@ class LedgerServiceTestCase(unittest.TestCase):
         self.assertIn("已为你记下一笔支出", second["messages"][-1].content)
 
     def test_image_income_candidate_maps_to_income_bill(self) -> None:
+        """收入类图片凭证应生成收入账单。"""
         self._reset_empty_ledger()
         agent = create_local_agent(model=ToolFriendlyFakeListChatModel(responses=[
             self._analysis_json(
@@ -404,7 +426,8 @@ class LedgerServiceTestCase(unittest.TestCase):
         self.assertIn("时间 2026-04-19 09:00", result["messages"][-1].content)
 
     def test_image_analysis_requires_api_key(self) -> None:
-        os.environ.pop("ACCOUNT_AGENT_VISION_MODEL", None)
+        """未配置 API Key 时图片分析应快速失败。"""
+        os.environ.pop("ACCOUNT_AGENT_MODEL", None)
         os.environ.pop("ACCOUNT_AGENT_API_KEY", None)
         os.environ.pop("DEEPSEEK_API_KEY", None)
         os.environ.pop("DEEPSEEK_BASE_URL", None)
@@ -424,6 +447,7 @@ class LedgerServiceTestCase(unittest.TestCase):
             )
 
     def test_text_request_does_not_call_image_analysis_service(self) -> None:
+        """纯文本请求不应进入图片分析分支。"""
         agent = create_local_agent(
             model=ToolFriendlyFakeListChatModel(responses=["文本链路正常"]),
             analysis_service=ExplodingImageAnalysisService(),
@@ -437,6 +461,7 @@ class LedgerServiceTestCase(unittest.TestCase):
         self.assertEqual(result["messages"][-1].content, "文本链路正常")
 
     def test_image_invalid_category_only_asks_question_without_real_fixture(self) -> None:
+        """缺失分类时应先追问而不是直接保存。"""
         self._reset_empty_ledger()
         analysis_service = StubImageAnalysisService(
             {
@@ -471,6 +496,7 @@ class LedgerServiceTestCase(unittest.TestCase):
         self.assertIn("分类", result["messages"][-1].content)
 
     def test_normalize_candidate_handles_string_and_negative_amount_without_image_file(self) -> None:
+        """候选数据规范化应将负数字符串金额转成正数。"""
         service = ImageAnalysisService(llm=object())
 
         candidate = service._normalize_candidate(
@@ -488,6 +514,7 @@ class LedgerServiceTestCase(unittest.TestCase):
         self.assertEqual(candidate["category"], "餐饮")
 
     def _reset_empty_ledger(self) -> None:
+        """重置测试账本并清理缓存单例。"""
         if self.ledger_path.exists():
             self.ledger_path.unlink()
         get_settings.cache_clear()
@@ -501,6 +528,7 @@ class LedgerServiceTestCase(unittest.TestCase):
         raw_summary: str,
         bill_candidate: dict[str, object] | None,
     ) -> str:
+        """构造一份假的图片分析 JSON 结果。"""
         missing_fields = []
         if is_accounting_related:
             candidate = bill_candidate or {}
@@ -522,6 +550,7 @@ class LedgerServiceTestCase(unittest.TestCase):
 
     @staticmethod
     def _receipt_image_message(text: str) -> HumanMessage:
+        """使用真实收据夹具图片构造 HumanMessage。"""
         image_base64 = base64.b64encode((FIXTURES_DIR / "restaurant_receipt.jpg").read_bytes()).decode("utf-8")
         return HumanMessage(
             content=[
@@ -536,6 +565,7 @@ class LedgerServiceTestCase(unittest.TestCase):
 
     @staticmethod
     def _inline_image_message(text: str) -> HumanMessage:
+        """使用内联假图片数据构造 HumanMessage。"""
         image_base64 = base64.b64encode(b"fake-image-bytes").decode("utf-8")
         return HumanMessage(
             content=[
