@@ -19,6 +19,7 @@
 ```text
 agent/
   account_agent/
+    api/          # FastAPI 联调接口
     config/       # 配置
     graph/        # LangGraph 流程与节点
     service/      # 账本与图片分析服务
@@ -62,6 +63,14 @@ uv run langgraph dev --no-browser
 
 如果提示找不到 `langgraph` 命令，请先安装 `langgraph-cli`。
 
+5. 启动前端联调 API：
+
+```bash
+uv run accounting-agent-api
+```
+
+默认会启动在 `http://127.0.0.1:8000`。
+
 ## 示例指令
 
 - `记一笔午饭，花了 28 元，分类餐饮`
@@ -71,6 +80,54 @@ uv run langgraph dev --no-browser
 - `按收入类型汇总一下`
 
 多模态图片链路请在 LangSmith / Studio / API 调用中测试，给用户消息直接附图即可，不再把本地文件路径作为正式输入方式。
+
+## API 联调
+
+当前已经提供 FastAPI 接口，前端可以直接请求 Python 服务：
+
+- `GET /api/v1/health`
+- `POST /api/v1/agent/chat`
+- `POST /api/v1/chat/stream`
+- `GET /api/v1/chat/history/{thread_id}`
+
+文本请求示例：
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/agent/chat ^
+  -H "Content-Type: application/json" ^
+  -d "{\"thread_id\":\"web-user-1\",\"message\":\"工资发了2000\"}"
+```
+
+联调阶段默认继续使用本地 JSON 账本存储，后续只需要把存储层替换成 Java API 适配器即可。
+
+正式流式接口示例：
+
+```bash
+curl -N -X POST http://127.0.0.1:8000/api/v1/chat/stream ^
+  -H "Content-Type: application/json" ^
+  -d "{\"thread_id\":\"conv_user_8892\",\"message\":\"识别这张图片并记账\",\"stream\":true,\"attachments\":[{\"type\":\"image\",\"url\":\"https://oss.example.com/account/receipt.jpg\"}]}"
+```
+
+推荐的正式上传链路：
+
+- 前端先请求 Spring
+- Spring 上传附件到 OSS
+- Spring/前端拿到图片 URL
+- 前端再把 URL 放进 `attachments` 发给 Python Agent
+
+当前 SSE 事件类型：
+
+- `info`：开始思考提示
+- `tool`：工具调用信息
+- `delta`：当前回复片段
+- `final`：最终结构化结果
+- `[DONE]`：本轮结束
+
+说明：
+
+- 目前这层 SSE 已符合前端事件流协议，但 agent 内部仍以阻塞图执行为主，所以 `delta` 现在是“消息块级流”，还不是逐 token 真流。
+- 会话历史当前基于 LangGraph 内存 checkpoint，服务重启后线程记忆会丢失。
+- Python Agent 侧已经不再负责文件上传与文件落盘，附件由前端通过 URL 引用。
 
 ## 推荐配置
 

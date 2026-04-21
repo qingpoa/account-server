@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 
-from langchain_core.messages import BaseMessage, HumanMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 
 from account_agent.graph import create_local_agent
 
@@ -37,6 +38,94 @@ class AccountingAgentService:
         message = result["messages"][-1]
         return self._message_to_text(message.content)
 
+    def chat_messages(
+        self,
+        messages: Sequence[BaseMessage],
+        thread_id: str,
+    ) -> str:
+        result = self.invoke_messages(messages=messages, thread_id=thread_id)
+        message = result["messages"][-1]
+        return self._message_to_text(message.content)
+
+    def stream_events(
+        self,
+        messages: Sequence[BaseMessage],
+        thread_id: str,
+    ):
+        yield {"type": "info", "content": "Agent 正在思考..."}
+        for event in self._agent.stream(
+            {"messages": list(messages)},
+            config={"configurable": {"thread_id": thread_id}},
+            stream_mode=["updates"],
+            version="v2",
+        ):
+            if not isinstance(event, dict) or event.get("type") != "updates":
+                continue
+            data = event.get("data")
+            if not isinstance(data, dict):
+                continue
+            for node_name, payload in data.items():
+                if not isinstance(payload, dict):
+                    continue
+                messages_payload = payload.get("messages")
+                if not isinstance(messages_payload, list):
+                    continue
+                for message in messages_payload:
+                    if isinstance(message, ToolMessage):
+                        tool_input = None
+                        try:
+                            tool_input = json.loads(message.content)
+                        except Exception:
+                            tool_input = message.content
+                        yield {
+                            "type": "tool",
+                            "name": message.name or node_name,
+                            "input": tool_input,
+                        }
+                        continue
+
+                    if isinstance(message, AIMessage):
+                        tool_calls = getattr(message, "tool_calls", None) or []
+                        for tool_call in tool_calls:
+                            yield {
+                                "type": "tool",
+                                "name": tool_call.get("name", ""),
+                                "input": tool_call.get("args", {}),
+                            }
+                        text = self._message_to_text(message.content)
+                        if text.strip():
+                            yield {"type": "delta", "content": text}
+                            yield {
+                                "type": "final",
+                                "values": {
+                                    "reply": text,
+                                    "thread_id": thread_id,
+                                    "node": node_name,
+                                },
+                            }
+
+    def get_history(self, thread_id: str) -> dict[str, object]:
+        snapshot = self._agent.get_state(
+            {"configurable": {"thread_id": thread_id}},
+        )
+        messages = snapshot.values.get("messages", [])
+        history: list[dict[str, str]] = []
+        for message in messages:
+            role = self._message_role(message)
+            if role is None:
+                continue
+            history.append(
+                {
+                    "role": role,
+                    "content": self._message_to_text(message.content),
+                    "createTime": "",
+                }
+            )
+        return {
+            "thread_id": thread_id,
+            "messages": history,
+        }
+
     @staticmethod
     def _message_to_text(content: object) -> str:
         if isinstance(content, str):
@@ -51,3 +140,13 @@ class AccountingAgentService:
                     parts.append(str(block.get("text", "")))
             return "\n".join(part for part in parts if part).strip()
         return str(content)
+
+    @staticmethod
+    def _message_role(message: BaseMessage) -> str | None:
+        if isinstance(message, HumanMessage):
+            return "user"
+        if isinstance(message, AIMessage):
+            return "assistant"
+        if isinstance(message, SystemMessage):
+            return "system"
+        return None

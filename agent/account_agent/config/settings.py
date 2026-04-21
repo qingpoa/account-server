@@ -24,8 +24,6 @@ class Settings:
     vision_api_key: str | None
     vision_base_url: str | None
     default_thread_id: str
-    deepseek_api_key: str | None
-    deepseek_base_url: str | None
     langchain_api_key: str | None
     langchain_project: str | None
     langchain_tracing_v2: bool
@@ -57,16 +55,12 @@ def get_settings() -> Settings:
         vision_api_key=(
             os.getenv("ACCOUNT_AGENT_VISION_API_KEY")
             or os.getenv("ACCOUNT_AGENT_API_KEY")
-            or os.getenv("DEEPSEEK_API_KEY")
         ),
         vision_base_url=(
             os.getenv("ACCOUNT_AGENT_VISION_BASE_URL")
             or os.getenv("ACCOUNT_AGENT_BASE_URL")
-            or os.getenv("DEEPSEEK_BASE_URL")
         ),
         default_thread_id=os.getenv("ACCOUNT_AGENT_THREAD_ID", "demo-thread"),
-        deepseek_api_key=os.getenv("DEEPSEEK_API_KEY"),
-        deepseek_base_url=os.getenv("DEEPSEEK_BASE_URL"),
         langchain_api_key=os.getenv("LANGCHAIN_API_KEY"),
         langchain_project=os.getenv("LANGCHAIN_PROJECT", "accounting-agent"),
         langchain_tracing_v2=os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true",
