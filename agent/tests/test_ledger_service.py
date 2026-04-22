@@ -5,17 +5,23 @@ import json
 import os
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 from uuid import uuid4
 
 from langchain_core.language_models.fake_chat_models import FakeListChatModel
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 from account_agent.config import get_settings
 from account_agent.graph import build_graph, create_local_agent
+from account_agent.graph.builder import _recent_add_bill_payloads
 from account_agent.service.image_analysis_service import ImageAnalysisService
 from account_agent.service.ledger_service import LedgerService
 from account_agent.storage import JsonLedgerStore
-from account_agent.tools.ledger_tools import get_ledger_service
+from account_agent.tools.ledger_tools import (
+    get_bill_command_service,
+    get_bill_query_service,
+    get_stat_query_service,
+)
 
 
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
@@ -96,6 +102,53 @@ class TextAddBillReplyModel(ToolFriendlyFakeListChatModel):
         )
 
 
+class MultiAddBillReplyModel(ToolFriendlyFakeListChatModel):
+    def __init__(self) -> None:
+        """准备一个一次新增两笔账并返回汇总回执的假模型。"""
+        super().__init__(responses=["unused"])
+        self._call_count = 0
+
+    def invoke(self, input, config=None, **kwargs):
+        """第一次返回两条工具调用，第二次返回多笔汇总回执。"""
+        self._call_count += 1
+        if self._call_count == 1:
+            return AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "add_bill",
+                        "args": {
+                            "amount": 40,
+                            "kind": "expense",
+                            "category": "餐饮",
+                            "note": "吃饭",
+                            "occurred_at": "2026-04-22T19:27:34",
+                        },
+                        "id": "call_multi_add_bill_1",
+                        "type": "tool_call",
+                    },
+                    {
+                        "name": "add_bill",
+                        "args": {
+                            "amount": 22222,
+                            "kind": "income",
+                            "category": "工资",
+                            "note": "工资收入",
+                            "occurred_at": "2026-04-22T19:27:34",
+                        },
+                        "id": "call_multi_add_bill_2",
+                        "type": "tool_call",
+                    },
+                ],
+            )
+        return AIMessage(
+            content=(
+                "这次一共为你记下 2 笔账：一笔是 40.0 元的餐饮支出，备注吃饭；"
+                "另一笔是 22222.0 元的工资收入，备注工资收入。"
+            )
+        )
+
+
 class StubImageAnalysisService:
     def __init__(self, result: dict[str, object]) -> None:
         """保存一份固定图片分析结果供测试复用。"""
@@ -129,6 +182,56 @@ class ExplodingImageAnalysisService:
         raise AssertionError("image analysis should not be called for text-only requests")
 
 
+class LocalBillCommandAdapter:
+    """在图测试中用本地账本模拟后端新增账单服务。"""
+
+    def __init__(self, service: LedgerService) -> None:
+        """保存本地账本服务引用。"""
+        self._service = service
+
+    def add_bill(self, payload: dict[str, object]) -> dict[str, object]:
+        """将后端风格调用转发到本地账本服务。"""
+        bill = self._service.add_bill(
+            amount=float(payload["amount"]),
+            kind=str(payload["kind"]),
+            category=str(payload["category"]),
+            note=str(payload.get("note", "")),
+            occurred_at=str(payload["occurred_at"]) if payload.get("occurred_at") else None,
+        )
+        return {"id": bill["id"], "overspendAlert": None}
+
+
+class LocalBillQueryAdapter:
+    """在图测试中用本地账本模拟后端账单查询服务。"""
+
+    def __init__(self, service: LedgerService) -> None:
+        """保存本地账本服务引用。"""
+        self._service = service
+
+    def list_recent_bills(self, params: dict[str, object]) -> list[dict[str, object]]:
+        """将后端风格查询转发到本地账本服务。"""
+        return self._service.list_recent_bills(
+            limit=int(params.get("limit", 5)),
+            kind=str(params["kind"]) if params.get("kind") else None,
+            category=str(params["category"]) if params.get("category") else None,
+        )
+
+
+class LocalStatQueryAdapter:
+    """在图测试中用本地账本模拟后端统计服务。"""
+
+    def __init__(self, service: LedgerService) -> None:
+        """保存本地账本服务引用。"""
+        self._service = service
+
+    def summarize_bills(self, params: dict[str, object]) -> dict[str, object]:
+        """将后端风格统计转发到本地账本服务。"""
+        return self._service.summarize_bills(
+            kind=str(params["kind"]) if params.get("kind") else None,
+            category=str(params["category"]) if params.get("category") else None,
+        )
+
+
 class LedgerServiceTestCase(unittest.TestCase):
     def setUp(self) -> None:
         """准备独立的 JSON 账本并写入测试样例数据。"""
@@ -138,9 +241,29 @@ class LedgerServiceTestCase(unittest.TestCase):
         os.environ["ACCOUNT_AGENT_LEDGER_PATH"] = str(self.ledger_path)
         os.environ["ACCOUNT_AGENT_MODEL"] = "fake-vision-model"
         get_settings.cache_clear()
-        get_ledger_service.cache_clear()
+        get_bill_command_service.cache_clear()
+        get_bill_query_service.cache_clear()
+        get_stat_query_service.cache_clear()
 
         self.service = LedgerService(JsonLedgerStore(self.ledger_path))
+        self.bill_command_service = LocalBillCommandAdapter(self.service)
+        self.bill_query_service = LocalBillQueryAdapter(self.service)
+        self.stat_query_service = LocalStatQueryAdapter(self.service)
+        self.command_patcher = patch(
+            "account_agent.tools.ledger_tools.get_bill_command_service",
+            return_value=self.bill_command_service,
+        )
+        self.query_patcher = patch(
+            "account_agent.tools.ledger_tools.get_bill_query_service",
+            return_value=self.bill_query_service,
+        )
+        self.stat_patcher = patch(
+            "account_agent.tools.ledger_tools.get_stat_query_service",
+            return_value=self.stat_query_service,
+        )
+        self.command_patcher.start()
+        self.query_patcher.start()
+        self.stat_patcher.start()
         self.service.add_bill(
             amount=28,
             kind="expense",
@@ -165,12 +288,17 @@ class LedgerServiceTestCase(unittest.TestCase):
 
     def tearDown(self) -> None:
         """清理缓存配置并删除临时账本文件。"""
+        self.command_patcher.stop()
+        self.query_patcher.stop()
+        self.stat_patcher.stop()
         get_settings.cache_clear()
-        get_ledger_service.cache_clear()
         os.environ.pop("ACCOUNT_AGENT_LEDGER_PATH", None)
         os.environ.pop("ACCOUNT_AGENT_MODEL", None)
         os.environ.pop("ACCOUNT_AGENT_API_KEY", None)
         os.environ.pop("ACCOUNT_AGENT_BASE_URL", None)
+        get_bill_command_service.cache_clear()
+        get_bill_query_service.cache_clear()
+        get_stat_query_service.cache_clear()
         if self.ledger_path.exists():
             self.ledger_path.unlink()
 
@@ -250,8 +378,77 @@ class LedgerServiceTestCase(unittest.TestCase):
         self.assertEqual(len(bills), 1)
         self.assertEqual(bills[0].kind, "income")
         self.assertEqual(bills[0].category, "工资")
-        self.assertIn("已为你记下一笔收入", result["messages"][-1].content)
+        self.assertIn("已帮你记下这笔收入", result["messages"][-1].content)
         self.assertIn("2000.0 元", result["messages"][-1].content)
+
+    def test_text_multi_add_bill_uses_all_saved_results_in_reply(self) -> None:
+        """一轮新增多笔账时，最终回执应覆盖全部成功账单。"""
+        self._reset_empty_ledger()
+        agent = create_local_agent(model=MultiAddBillReplyModel())
+
+        result = agent.invoke(
+            {"messages": [HumanMessage(content="吃饭 40，工资发了 22222")]},
+            config={"configurable": {"thread_id": "text-multi-add-thread"}},
+        )
+
+        store = JsonLedgerStore(self.ledger_path)
+        bills = store.list_bills()
+        self.assertEqual(len(bills), 2)
+        reply = result["messages"][-1].content
+        self.assertIn("2 笔账", reply)
+        self.assertIn("40.0 元", reply)
+        self.assertIn("22222.0 元", reply)
+
+    def test_recent_add_bill_payloads_do_not_cross_into_previous_turn(self) -> None:
+        """统计或查询工具结果不应误读上一轮的记账回执。"""
+        state = {
+            "messages": [
+                HumanMessage(content="吃饭30，工资100"),
+                AIMessage(
+                    content="",
+                    tool_calls=[
+                        {"name": "add_bill", "args": {"amount": 30}, "id": "call_1", "type": "tool_call"},
+                        {"name": "add_bill", "args": {"amount": 100}, "id": "call_2", "type": "tool_call"},
+                    ],
+                ),
+                ToolMessage(
+                    name="add_bill",
+                    tool_call_id="call_1",
+                    content=json.dumps(
+                        {"ok": True, "bill": {"id": "1", "amount": 30.0, "kind": "expense", "category": "餐饮"}}
+                    ),
+                ),
+                ToolMessage(
+                    name="add_bill",
+                    tool_call_id="call_2",
+                    content=json.dumps(
+                        {"ok": True, "bill": {"id": "2", "amount": 100.0, "kind": "income", "category": "工资"}}
+                    ),
+                ),
+                AIMessage(content="已帮你记下 2 笔账。"),
+                HumanMessage(content="帮我统计一下最近两笔账单"),
+                AIMessage(
+                    content="",
+                    tool_calls=[
+                        {
+                            "name": "summarize_bills",
+                            "args": {"kind": None, "category": None},
+                            "id": "call_3",
+                            "type": "tool_call",
+                        }
+                    ],
+                ),
+                ToolMessage(
+                    name="summarize_bills",
+                    tool_call_id="call_3",
+                    content=json.dumps(
+                        {"ok": True, "summary": {"count": 2, "total_amount": 130.0, "by_kind": {"income": 100, "expense": 30}}}
+                    ),
+                ),
+            ]
+        }
+
+        self.assertEqual(_recent_add_bill_payloads(state), [])
 
     def test_normalize_image_blocks_uses_openai_image_url_shape(self) -> None:
         """图片块应规范化为 OpenAI 兼容的 image_url 结构。"""
@@ -303,9 +500,9 @@ class LedgerServiceTestCase(unittest.TestCase):
         self.assertEqual(bills[0].amount, 28.0)
         self.assertEqual(bills[0].kind, "expense")
         self.assertEqual(bills[0].category, "餐饮")
-        self.assertIn("已为你记下一笔支出", result["messages"][-1].content)
+        self.assertIn("已帮你记下这笔支出", result["messages"][-1].content)
         self.assertIn("28.0 元", result["messages"][-1].content)
-        self.assertIn("时间 2026-04-19 12:10", result["messages"][-1].content)
+        self.assertIn("时间 2026-04-19T12:10:00", result["messages"][-1].content)
 
     def test_image_irrelevant_does_not_add_bill(self) -> None:
         """与记账无关的图片不应生成账单。"""
@@ -390,7 +587,7 @@ class LedgerServiceTestCase(unittest.TestCase):
         self.assertEqual(len(bills), 1)
         self.assertEqual(bills[0].amount, 36.0)
         self.assertEqual(bills[0].category, "交通")
-        self.assertIn("已为你记下一笔支出", second["messages"][-1].content)
+        self.assertIn("已帮你记下这笔支出", second["messages"][-1].content)
 
     def test_image_income_candidate_maps_to_income_bill(self) -> None:
         """收入类图片凭证应生成收入账单。"""
@@ -421,9 +618,9 @@ class LedgerServiceTestCase(unittest.TestCase):
         self.assertEqual(len(bills), 1)
         self.assertEqual(bills[0].kind, "income")
         self.assertEqual(bills[0].category, "工资")
-        self.assertIn("已为你记下一笔收入", result["messages"][-1].content)
+        self.assertIn("已帮你记下这笔收入", result["messages"][-1].content)
         self.assertIn("12000.0 元", result["messages"][-1].content)
-        self.assertIn("时间 2026-04-19 09:00", result["messages"][-1].content)
+        self.assertIn("时间 2026-04-19T09:00:00", result["messages"][-1].content)
 
     def test_image_analysis_requires_api_key(self) -> None:
         """未配置 API Key 时图片分析应快速失败。"""
@@ -518,7 +715,6 @@ class LedgerServiceTestCase(unittest.TestCase):
         if self.ledger_path.exists():
             self.ledger_path.unlink()
         get_settings.cache_clear()
-        get_ledger_service.cache_clear()
 
     @staticmethod
     def _analysis_json(

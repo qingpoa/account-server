@@ -4,7 +4,7 @@ import json
 from collections.abc import Mapping, Sequence
 from uuid import uuid4
 
-from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, MessagesState, StateGraph
@@ -17,7 +17,7 @@ from account_agent.tools import get_analysis_tools, get_tools
 
 
 SYSTEM_PROMPT = """
-你是一个记账系统智能体。
+你是一个记账系统智能体。你的名字叫盒小记，你的说话风格是可爱，如果用户问你是谁，你就回答你的名字。
 
 必须遵守下面的规则：
 1. 用户要求新增账单时，优先调用工具，不要只做口头回复。
@@ -27,6 +27,9 @@ SYSTEM_PROMPT = """
 5. 查询和统计时，优先基于工具真实结果回答，再补一句简洁总结。
 6. 不要编造账单或统计结果。
 7. 当上下文里有一笔待补全的图片账单时，优先补齐它；只有 `amount`、`kind`、`category` 都齐全后才调用 `add_bill`。
+8. 回复要自然、清楚，尽量像一个日常帮用户管账的助手，要保持你可爱的说话风格，不要写成生硬的系统播报。
+9. 查询最近流水时，先把关键信息讲清楚，再补一些你的总结；必要时可以换行提升可读性。
+10. 统计时先说最重要的结论，再补充关键数字，不要机械复述原始字段名。
 """.strip()
 
 MISSING_FIELD_LABELS = {
@@ -40,12 +43,12 @@ class AccountAgentState(MessagesState, total=False):
     pending_bill_candidate: dict[str, object] | None
 
 
-def _build_model(model=None):
+def _build_model(model=None, *, temperature: float | None = None):
     """根据配置或传入覆盖值构建基础对话模型。"""
     settings = get_settings()
     default_kwargs = {
         "model": settings.model,
-        "temperature": settings.temperature,
+        "temperature": settings.temperature if temperature is None else temperature,
         "timeout": settings.request_timeout,
         "api_key": settings.api_key,
         "base_url": settings.base_url or "https://dashscope.aliyuncs.com/compatible-mode/v1",
@@ -122,6 +125,32 @@ def _tool_payload(message: AnyMessage) -> dict[str, object]:
         if text:
             return json.loads(text)
     raise ValueError("工具结果不是合法 JSON")
+
+
+def _recent_add_bill_payloads(state: AccountAgentState) -> list[dict[str, object]]:
+    """收集当前轮次末尾连续出现的新增账单工具结果。"""
+    payloads: list[dict[str, object]] = []
+    for message in reversed(state["messages"]):
+        if not isinstance(message, ToolMessage):
+            break
+        if (message.name or "") != "add_bill":
+            if payloads:
+                break
+            break
+        try:
+            payload = _tool_payload(message)
+        except Exception:
+            if payloads:
+                break
+            break
+        if isinstance(payload.get("bill"), Mapping):
+            payloads.append(payload)
+            continue
+        if payloads:
+            break
+        break
+    payloads.reverse()
+    return payloads
 
 
 def create_agent(model=None, checkpointer=None, analysis_service: ImageAnalysisService | None = None):
@@ -223,55 +252,42 @@ def create_agent(model=None, checkpointer=None, analysis_service: ImageAnalysisS
 
     def route_after_ledger(state: AccountAgentState):
         """判断账本工具结果是直接生成回执还是继续交给助手处理。"""
-        payload = _tool_payload(state["messages"][-1])
-        if isinstance(payload.get("bill"), Mapping):
+        if _recent_add_bill_payloads(state):
             return "bill_reply_assistant"
         return "assistant"
 
     def bill_reply_assistant(state: AccountAgentState) -> dict[str, object]:
-        """在成功记账后生成简短自然语言确认回复。"""
-        payload = _tool_payload(state["messages"][-1])
-        bill = payload.get("bill") if isinstance(payload.get("bill"), Mapping) else {}
+        """在成功记账后直接返回模板化确认回复。"""
+        payloads = _recent_add_bill_payloads(state)
+        bills = [
+            payload["bill"]
+            for payload in payloads
+            if isinstance(payload.get("bill"), Mapping)
+        ]
         fallback = "已帮你完成记账。"
-        if bill:
-            details = []
-            if bill.get("kind") == "income":
-                details.append("收入")
-            elif bill.get("kind") == "expense":
-                details.append("支出")
-            if bill.get("amount") is not None:
-                details.append(f"{bill.get('amount')} 元")
-            if bill.get("category"):
-                details.append(f"分类 {bill.get('category')}")
-            if bill.get("occurred_at"):
-                details.append(f"时间 {bill.get('occurred_at')}")
-            if bill.get("note"):
-                details.append(f"备注 {bill.get('note')}")
-            if details:
-                fallback = f"已帮你记账：{'，'.join(str(item) for item in details)}。"
-        try:
-            response = base_llm.invoke(
-                [
-                    SystemMessage(
-                        content=(
-                            "你是记账系统的回执助手。"
-                            "请严格基于工具真实结果，用自然、简洁的中文回复用户。"
-                            "不要编造，不要再次调用工具，控制在 1 到 2 句。"
-                        )
-                    ),
-                    HumanMessage(
-                        content=(
-                            "请基于下面的工具真实结果，生成一条面向用户的记账确认回复：\n"
-                            f"{json.dumps(payload, ensure_ascii=False)}"
-                        )
-                    ),
-                ]
-            )
-            text = response.text.strip() if hasattr(response, "text") else str(response.content).strip()
-        except Exception:
-            text = ""
+        if bills:
+            if len(bills) == 1:
+                bill = bills[0]
+                kind_label = "收入" if bill.get("kind") == "income" else "支出"
+                amount = f"{bill.get('amount')} 元" if bill.get("amount") is not None else "金额未知"
+                category = f"{bill.get('category')}" if bill.get("category") else "未分类"
+                parts = [f"已帮你记下这笔{kind_label}：{category} {amount}"]
+                if bill.get("occurred_at"):
+                    parts.append(f"时间 {bill.get('occurred_at')}")
+                if bill.get("note"):
+                    parts.append(f"备注 {bill.get('note')}")
+                fallback = "，".join(parts) + "。"
+            else:
+                lines = []
+                for index, bill in enumerate(bills, start=1):
+                    kind_label = "收入" if bill.get("kind") == "income" else "支出"
+                    amount = f"{bill.get('amount')} 元" if bill.get("amount") is not None else "金额未知"
+                    category = f"，分类 {bill.get('category')}" if bill.get("category") else ""
+                    note = f"，备注 {bill.get('note')}" if bill.get("note") else ""
+                    lines.append(f"第 {index} 笔：{kind_label}，{amount}{category}{note}")
+                fallback = f"已帮你记下 {len(bills)} 笔账。\n" + "\n".join(lines)
         return {
-            "messages": [AIMessage(content=text or fallback)],
+            "messages": [AIMessage(content=fallback)],
             "pending_bill_candidate": None,
         }
 

@@ -44,7 +44,7 @@ class LedgerService:
         """基于给定存储实现创建账本服务。"""
         self._store = store
 
-    def add_bill(
+    def     add_bill(
         self,
         *,
         amount: float,

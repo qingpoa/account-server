@@ -23,23 +23,51 @@ class AccountingAgentService:
         self,
         messages: Sequence[BaseMessage],
         thread_id: str,
+        *,
+        authorization: str | None = None,
+        token: str | None = None,
     ) -> dict[str, object]:
         """使用显式消息列表调用智能体。"""
         return self._agent.invoke(
             {"messages": list(messages)},
-            config={"configurable": {"thread_id": thread_id}},
+            config=self._build_graph_config(
+                thread_id=thread_id,
+                authorization=authorization,
+                token=token,
+            ),
         )
 
-    def invoke(self, user_input: str, thread_id: str) -> dict[str, object]:
+    def invoke(
+        self,
+        user_input: str,
+        thread_id: str,
+        *,
+        authorization: str | None = None,
+        token: str | None = None,
+    ) -> dict[str, object]:
         """使用单条用户文本消息调用智能体。"""
         return self.invoke_messages(
             messages=[HumanMessage(content=user_input)],
             thread_id=thread_id,
+            authorization=authorization,
+            token=token,
         )
 
-    def chat(self, user_input: str, thread_id: str) -> str:
+    def chat(
+        self,
+        user_input: str,
+        thread_id: str,
+        *,
+        authorization: str | None = None,
+        token: str | None = None,
+    ) -> str:
         """返回单次用户输入对应的最终文本回复。"""
-        result = self.invoke(user_input=user_input, thread_id=thread_id)
+        result = self.invoke(
+            user_input=user_input,
+            thread_id=thread_id,
+            authorization=authorization,
+            token=token,
+        )
         message = result["messages"][-1]
         return self._message_to_text(message.content)
 
@@ -47,9 +75,17 @@ class AccountingAgentService:
         self,
         messages: Sequence[BaseMessage],
         thread_id: str,
+        *,
+        authorization: str | None = None,
+        token: str | None = None,
     ) -> str:
         """返回自定义消息序列对应的最终文本回复。"""
-        result = self.invoke_messages(messages=messages, thread_id=thread_id)
+        result = self.invoke_messages(
+            messages=messages,
+            thread_id=thread_id,
+            authorization=authorization,
+            token=token,
+        )
         message = result["messages"][-1]
         return self._message_to_text(message.content)
 
@@ -57,12 +93,19 @@ class AccountingAgentService:
         self,
         messages: Sequence[BaseMessage],
         thread_id: str,
+        *,
+        authorization: str | None = None,
+        token: str | None = None,
     ):
         """将图执行过程转换为前端可消费的 SSE 事件流。"""
         yield {"type": "info", "content": "Agent 正在思考..."}
         for event in self._agent.stream(
             {"messages": list(messages)},
-            config={"configurable": {"thread_id": thread_id}},
+            config=self._build_graph_config(
+                thread_id=thread_id,
+                authorization=authorization,
+                token=token,
+            ),
             stream_mode=["updates"],
             version="v2",
         ):
@@ -133,6 +176,23 @@ class AccountingAgentService:
             "thread_id": thread_id,
             "messages": history,
         }
+
+    @staticmethod
+    def _build_graph_config(
+        *,
+        thread_id: str,
+        authorization: str | None,
+        token: str | None,
+    ) -> dict[str, object]:
+        """构造传给 LangGraph 的 configurable 配置。"""
+        configurable: dict[str, object] = {
+            "thread_id": thread_id,
+        }
+        if authorization:
+            configurable["authorization"] = authorization
+        if token:
+            configurable["token"] = token
+        return {"configurable": configurable}
 
     @staticmethod
     def _message_to_text(content: object) -> str:

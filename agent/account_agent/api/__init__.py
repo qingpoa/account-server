@@ -1,3 +1,3 @@
-from .app import app, create_app
+from .request_context import RequestContext, get_request_context
 
-__all__ = ["app", "create_app"]
+__all__ = ["RequestContext", "get_request_context"]

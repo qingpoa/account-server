@@ -18,6 +18,10 @@ class Settings:
     temperature: float
     request_timeout: float
     ledger_path: Path
+    server_base_url: str | None
+    server_auth_mode: str
+    server_token: str | None
+    server_timeout: float
     api_key: str | None
     base_url: str | None
     default_thread_id: str
@@ -48,6 +52,10 @@ def get_settings() -> Settings:
         temperature=float(os.getenv("ACCOUNT_AGENT_TEMPERATURE", "0")),
         request_timeout=float(os.getenv("ACCOUNT_AGENT_REQUEST_TIMEOUT", "20")),
         ledger_path=ledger_path,
+        server_base_url=os.getenv("ACCOUNT_AGENT_SERVER_BASE_URL"),
+        server_auth_mode=os.getenv("ACCOUNT_AGENT_SERVER_AUTH_MODE", "bearer").strip().lower(),
+        server_token=os.getenv("ACCOUNT_AGENT_SERVER_TOKEN"),
+        server_timeout=float(os.getenv("ACCOUNT_AGENT_SERVER_TIMEOUT", "20")),
         api_key=os.getenv("ACCOUNT_AGENT_API_KEY") or os.getenv("DEEPSEEK_API_KEY"),
         base_url=os.getenv("ACCOUNT_AGENT_BASE_URL") or os.getenv("DEEPSEEK_BASE_URL"),
         default_thread_id=os.getenv("ACCOUNT_AGENT_THREAD_ID", "demo-thread"),

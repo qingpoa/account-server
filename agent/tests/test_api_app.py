@@ -25,27 +25,54 @@ class StubAgentService:
         self.last_chat_messages: dict[str, object] | None = None
         self.last_stream_messages: dict[str, object] | None = None
 
-    def chat(self, user_input: str, thread_id: str) -> str:
+    def chat(
+        self,
+        user_input: str,
+        thread_id: str,
+        *,
+        authorization: str | None = None,
+        token: str | None = None,
+    ) -> str:
         """模拟阻塞式文本对话入口。"""
         self.last_chat = {
             "user_input": user_input,
             "thread_id": thread_id,
+            "authorization": authorization,
+            "token": token,
         }
         return "text reply"
 
-    def chat_messages(self, messages, thread_id: str) -> str:
+    def chat_messages(
+        self,
+        messages,
+        thread_id: str,
+        *,
+        authorization: str | None = None,
+        token: str | None = None,
+    ) -> str:
         """模拟多模态阻塞式对话入口。"""
         self.last_chat_messages = {
             "messages": messages,
             "thread_id": thread_id,
+            "authorization": authorization,
+            "token": token,
         }
         return "image reply"
 
-    def stream_events(self, messages, thread_id: str):
+    def stream_events(
+        self,
+        messages,
+        thread_id: str,
+        *,
+        authorization: str | None = None,
+        token: str | None = None,
+    ):
         """模拟智能体返回的 SSE 事件流。"""
         self.last_stream_messages = {
             "messages": messages,
             "thread_id": thread_id,
+            "authorization": authorization,
+            "token": token,
         }
         yield {"type": "info", "content": "Agent 正在思考..."}
         yield {"type": "tool", "name": "add_bill", "input": {"amount": 20}}
@@ -66,11 +93,25 @@ class StubAgentService:
 class FailingAgentService(StubAgentService):
     """用于验证统一异常出口的失败桩对象。"""
 
-    def chat(self, user_input: str, thread_id: str) -> str:
+    def chat(
+        self,
+        user_input: str,
+        thread_id: str,
+        *,
+        authorization: str | None = None,
+        token: str | None = None,
+    ) -> str:
         """模拟阻塞式接口抛出业务异常。"""
         raise AgentError(status_code=503, message="大模型服务调用失败")
 
-    def stream_events(self, messages, thread_id: str):
+    def stream_events(
+        self,
+        messages,
+        thread_id: str,
+        *,
+        authorization: str | None = None,
+        token: str | None = None,
+    ):
         """模拟流式接口执行过程中抛出异常。"""
         raise RuntimeError("stream exploded")
 
@@ -104,6 +145,21 @@ class ApiAppTestCase(unittest.TestCase):
         self.assertEqual(body["data"]["reply"], "text reply")
         self.assertEqual(self.service.last_chat["user_input"], "工资发了2000")
         self.assertEqual(self.service.last_chat["thread_id"], "thread-api-text")
+        self.assertIsNone(self.service.last_chat["authorization"])
+
+    def test_text_chat_forwards_authorization_header(self) -> None:
+        """文本接口应将 Authorization 显式透传给智能体服务。"""
+        response = self.client.post(
+            "/api/v1/agent/chat",
+            json={"message": "工资发了2000", "thread_id": "thread-api-auth"},
+            headers={"Authorization": "Bearer test-auth-token"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            self.service.last_chat["authorization"],
+            "Bearer test-auth-token",
+        )
 
     def test_stream_chat_success(self) -> None:
         """流式对话应返回预期的 SSE 事件类型。"""
@@ -151,6 +207,7 @@ class ApiAppTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = self.service.last_chat_messages
         self.assertEqual(payload["thread_id"], "thread-stream-image")
+        self.assertIsNone(payload["authorization"])
         self.assertEqual(len(payload["messages"]), 1)
         self.assertIsInstance(payload["messages"][0], HumanMessage)
         content = payload["messages"][0].content
@@ -159,6 +216,20 @@ class ApiAppTestCase(unittest.TestCase):
         self.assertEqual(
             content[1]["image_url"]["url"],
             "https://oss.example.com/account/receipt.jpg",
+        )
+
+    def test_stream_chat_forwards_authorization_header(self) -> None:
+        """流式接口也应显式透传 Authorization。"""
+        response = self.client.post(
+            "/api/v1/chat/stream",
+            json={"message": "工资发了2000", "thread_id": "thread-stream-auth", "stream": False},
+            headers={"Authorization": "Bearer stream-auth-token"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            self.service.last_chat_messages["authorization"],
+            "Bearer stream-auth-token",
         )
 
     def test_stream_chat_rejects_unsupported_attachment_type(self) -> None:
