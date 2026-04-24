@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from collections.abc import Mapping, Sequence
+from functools import lru_cache
 from uuid import uuid4
 
 from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_openai import ChatOpenAI
-from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode
 
@@ -37,6 +39,8 @@ MISSING_FIELD_LABELS = {
     "kind": "收支类型",
     "category": "分类",
 }
+
+MODEL_MESSAGE_WINDOW = 15
 
 
 class AccountAgentState(MessagesState, total=False):
@@ -74,6 +78,28 @@ def _build_model(model=None, *, temperature: float | None = None):
         return ChatOpenAI(**model_kwargs)
 
     raise TypeError(f"Unsupported model value: {type(model).__name__}")
+
+
+@lru_cache(maxsize=1)
+def get_local_checkpointer() -> SqliteSaver:
+    """创建并缓存一个落盘到 SQLite 文件的本地 checkpoint。"""
+    settings = get_settings()
+    settings.checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(str(settings.checkpoint_path), check_same_thread=False)
+    saver = SqliteSaver(connection)
+    saver.setup()
+    return saver
+
+
+def close_local_checkpointer() -> None:
+    """关闭并清理本地 SQLite checkpoint，方便测试或重建连接。"""
+    if get_local_checkpointer.cache_info().currsize == 0:
+        return
+    saver = get_local_checkpointer()
+    connection = getattr(saver, "conn", None)
+    if connection is not None:
+        connection.close()
+    get_local_checkpointer.cache_clear()
 
 
 def _last_human_message(state: AccountAgentState) -> HumanMessage | None:
@@ -151,6 +177,14 @@ def _recent_add_bill_payloads(state: AccountAgentState) -> list[dict[str, object
         break
     payloads.reverse()
     return payloads
+
+
+def _messages_for_model(state: AccountAgentState, limit: int = MODEL_MESSAGE_WINDOW) -> list[AnyMessage]:
+    """限制传给模型的历史消息数量，避免上下文无限增长。"""
+    messages = list(state["messages"])
+    if limit <= 0 or len(messages) <= limit:
+        return messages
+    return messages[-limit:]
 
 
 def create_agent(model=None, checkpointer=None, analysis_service: ImageAnalysisService | None = None):
@@ -238,7 +272,7 @@ def create_agent(model=None, checkpointer=None, analysis_service: ImageAnalysisS
                     )
                 )
             )
-        messages.extend(state["messages"])
+        messages.extend(_messages_for_model(state))
         response = assistant_llm.invoke(
             messages
         )
@@ -332,8 +366,12 @@ def create_agent(model=None, checkpointer=None, analysis_service: ImageAnalysisS
 
 
 def create_local_agent(model=None, analysis_service: ImageAnalysisService | None = None):
-    """创建一个使用内存 checkpoint 的本地智能体。"""
-    return create_agent(model=model, checkpointer=InMemorySaver(), analysis_service=analysis_service)
+    """创建一个使用 SQLite checkpoint 的本地智能体。"""
+    return create_agent(
+        model=model,
+        checkpointer=get_local_checkpointer(),
+        analysis_service=analysis_service,
+    )
 
 
 def build_graph(model=None):

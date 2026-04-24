@@ -13,7 +13,10 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 
 from account_agent.config import get_settings
 from account_agent.graph import build_graph, create_local_agent
-from account_agent.graph.builder import _recent_add_bill_payloads
+from account_agent.graph.builder import (
+    _recent_add_bill_payloads,
+    close_local_checkpointer,
+)
 from account_agent.service.image_analysis_service import ImageAnalysisService
 from account_agent.service.ledger_service import LedgerService
 from account_agent.storage import JsonLedgerStore
@@ -238,9 +241,12 @@ class LedgerServiceTestCase(unittest.TestCase):
         self.runtime_dir = ROOT_RUNTIME_DIR
         self.runtime_dir.mkdir(exist_ok=True)
         self.ledger_path = self.runtime_dir / f"ledger_{uuid4().hex}.json"
+        self.checkpoint_path = self.runtime_dir / f"checkpoint_{uuid4().hex}.sqlite"
         os.environ["ACCOUNT_AGENT_LEDGER_PATH"] = str(self.ledger_path)
+        os.environ["ACCOUNT_AGENT_CHECKPOINT_PATH"] = str(self.checkpoint_path)
         os.environ["ACCOUNT_AGENT_MODEL"] = "fake-vision-model"
         get_settings.cache_clear()
+        close_local_checkpointer()
         get_bill_command_service.cache_clear()
         get_bill_query_service.cache_clear()
         get_stat_query_service.cache_clear()
@@ -292,7 +298,9 @@ class LedgerServiceTestCase(unittest.TestCase):
         self.query_patcher.stop()
         self.stat_patcher.stop()
         get_settings.cache_clear()
+        close_local_checkpointer()
         os.environ.pop("ACCOUNT_AGENT_LEDGER_PATH", None)
+        os.environ.pop("ACCOUNT_AGENT_CHECKPOINT_PATH", None)
         os.environ.pop("ACCOUNT_AGENT_MODEL", None)
         os.environ.pop("ACCOUNT_AGENT_API_KEY", None)
         os.environ.pop("ACCOUNT_AGENT_BASE_URL", None)
@@ -301,6 +309,13 @@ class LedgerServiceTestCase(unittest.TestCase):
         get_stat_query_service.cache_clear()
         if self.ledger_path.exists():
             self.ledger_path.unlink()
+        for path in (
+            self.checkpoint_path,
+            Path(f"{self.checkpoint_path}-wal"),
+            Path(f"{self.checkpoint_path}-shm"),
+        ):
+            if path.exists():
+                path.unlink()
 
     def test_add_bill_success(self) -> None:
         """新增账单时应完成规范化并成功落盘。"""
@@ -354,7 +369,7 @@ class LedgerServiceTestCase(unittest.TestCase):
         self.assertEqual(type(agent).__name__, "CompiledStateGraph")
 
     def test_create_local_agent_success(self) -> None:
-        """本地图入口应能配合内存 checkpoint 正常工作。"""
+        """本地图入口应能配合 SQLite checkpoint 正常工作。"""
         agent = create_local_agent(model=ToolFriendlyFakeListChatModel(responses=["本地入口可用"]))
         result = agent.invoke(
             {"messages": [HumanMessage(content="你好")]},
@@ -715,6 +730,7 @@ class LedgerServiceTestCase(unittest.TestCase):
         if self.ledger_path.exists():
             self.ledger_path.unlink()
         get_settings.cache_clear()
+        close_local_checkpointer()
 
     @staticmethod
     def _analysis_json(

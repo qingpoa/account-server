@@ -18,6 +18,7 @@ class Settings:
     temperature: float
     request_timeout: float
     ledger_path: Path
+    checkpoint_path: Path
     server_base_url: str | None
     server_auth_mode: str
     server_token: str | None
@@ -46,12 +47,17 @@ def get_settings() -> Settings:
         "ACCOUNT_AGENT_LEDGER_PATH",
         os.getenv("ACCOUNT_AGENT_LEDGER_DB_PATH", "./data/ledger.json"),
     )
+    checkpoint_path = _resolve_path(
+        "ACCOUNT_AGENT_CHECKPOINT_PATH",
+        "./runtime_data/checkpoints.sqlite",
+    )
 
     return Settings(
         model=os.getenv("ACCOUNT_AGENT_MODEL", "qwen3.5-flash"),
         temperature=float(os.getenv("ACCOUNT_AGENT_TEMPERATURE", "0")),
         request_timeout=float(os.getenv("ACCOUNT_AGENT_REQUEST_TIMEOUT", "20")),
         ledger_path=ledger_path,
+        checkpoint_path=checkpoint_path,
         server_base_url=os.getenv("ACCOUNT_AGENT_SERVER_BASE_URL"),
         server_auth_mode=os.getenv("ACCOUNT_AGENT_SERVER_AUTH_MODE", "bearer").strip().lower(),
         server_token=os.getenv("ACCOUNT_AGENT_SERVER_TOKEN"),

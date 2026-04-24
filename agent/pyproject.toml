@@ -13,6 +13,7 @@ dependencies = [
   "langchain-core>=1.2.30",
   "langchain-openai>=1.1.13",
   "langgraph>=1.1.6",
+  "langgraph-checkpoint-sqlite>=3.0.3",
   "fastapi>=0.116.1",
   "httpx>=0.28.1",
   "uvicorn>=0.35.0",

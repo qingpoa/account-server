@@ -11,7 +11,7 @@
 - 对相关图片自动抽取账单候选信息，信息足够时自动调用记账工具
 - 关键信息不足时，只追问缺失字段，不走草稿确认链
 - 使用显式 LangGraph 流程和双 `ToolNode`
-- 本地 CLI 默认使用内存 checkpointer
+- 本地 CLI / API 默认使用 SQLite checkpointer
 - LangSmith/LangGraph 发布入口已通过 `langgraph.json` 暴露
 
 ## 项目结构
@@ -123,7 +123,7 @@ curl -N -X POST http://127.0.0.1:8000/api/v1/chat/stream ^
 说明：
 
 - 目前这层 SSE 已符合前端事件流协议，但 agent 内部仍以阻塞图执行为主，所以 `delta` 现在是“消息块级流”，还不是逐 token 真流。
-- 会话历史当前基于 LangGraph 内存 checkpoint，服务重启后线程记忆会丢失。
+- 会话历史当前默认落盘到 SQLite checkpoint，重启进程后线程记忆仍可保留。
 - Python Agent 侧已经不再负责文件上传与文件落盘，附件由前端通过 URL 引用。
 - Python Agent 侧正式账务工具默认直接调用 Java 后端接口，不再回退到本地 JSON 账本。
 
@@ -139,6 +139,7 @@ curl -N -X POST http://127.0.0.1:8000/api/v1/chat/stream ^
 ```env
 ACCOUNT_AGENT_API_KEY=你的百炼API Key
 ACCOUNT_AGENT_TEMPERATURE=0
+ACCOUNT_AGENT_CHECKPOINT_PATH=./runtime_data/checkpoints.sqlite
 ACCOUNT_AGENT_SERVER_BASE_URL=http://127.0.0.1:8080/api/v1
 ACCOUNT_AGENT_SERVER_AUTH_MODE=bearer
 ACCOUNT_AGENT_SERVER_TOKEN=你的后端登录 token
@@ -147,6 +148,7 @@ ACCOUNT_AGENT_SERVER_TOKEN=你的后端登录 token
 默认同一套模型配置会同时用于文本对话和图片分析，账务工具则直接走 Java 后端。
 
 - `ACCOUNT_AGENT_TEMPERATURE` 主要控制主助手的工具决策稳定性，建议保持较低
+- `ACCOUNT_AGENT_CHECKPOINT_PATH` 用来指定 SQLite 会话文件位置；相对路径会落到 `agent/runtime_data/` 这类项目目录下
 
 ## 多模态图片记账说明
 
