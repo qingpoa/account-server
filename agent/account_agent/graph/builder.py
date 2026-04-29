@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from collections.abc import Mapping, Sequence
+from datetime import datetime
 from functools import lru_cache
 from uuid import uuid4
 
@@ -190,6 +191,18 @@ def _messages_for_model(state: AccountAgentState, limit: int = MODEL_MESSAGE_WIN
     return messages[-limit:]
 
 
+def _format_reply_time(value: object) -> str | None:
+    """将内部 ISO 时间格式化成更适合用户阅读的展示文本。"""
+    if value in (None, ""):
+        return None
+    text = str(value).strip()
+    try:
+        dt = datetime.fromisoformat(text)
+    except ValueError:
+        return text
+    return dt.strftime("%Y-%m-%d %H:%M")
+
+
 def create_agent(model=None, checkpointer=None, analysis_service: ImageAnalysisService | None = None):
     """创建并编译记账智能体的 LangGraph 工作流。"""
     agent_tools = get_tools()
@@ -309,8 +322,9 @@ def create_agent(model=None, checkpointer=None, analysis_service: ImageAnalysisS
                 amount = f"{bill.get('amount')} 元" if bill.get("amount") is not None else "金额未知"
                 category = f"{bill.get('category')}" if bill.get("category") else "未分类"
                 parts = [f"已帮你记下这笔{kind_label}：{category} {amount}"]
-                if bill.get("occurred_at"):
-                    parts.append(f"时间 {bill.get('occurred_at')}")
+                formatted_time = _format_reply_time(bill.get("occurred_at"))
+                if formatted_time:
+                    parts.append(f"时间 {formatted_time}")
                 if bill.get("note"):
                     parts.append(f"备注 {bill.get('note')}")
                 fallback = "，".join(parts) + "。"
@@ -321,7 +335,9 @@ def create_agent(model=None, checkpointer=None, analysis_service: ImageAnalysisS
                     amount = f"{bill.get('amount')} 元" if bill.get("amount") is not None else "金额未知"
                     category = f"，分类 {bill.get('category')}" if bill.get("category") else ""
                     note = f"，备注 {bill.get('note')}" if bill.get("note") else ""
-                    lines.append(f"第 {index} 笔：{kind_label}，{amount}{category}{note}")
+                    formatted_time = _format_reply_time(bill.get("occurred_at"))
+                    time_text = f"，时间 {formatted_time}" if formatted_time else ""
+                    lines.append(f"第 {index} 笔：{kind_label}，{amount}{category}{time_text}{note}")
                 fallback = f"已帮你记下 {len(bills)} 笔账。\n" + "\n".join(lines)
         return {
             "messages": [AIMessage(content=fallback)],
