@@ -23,7 +23,6 @@ agent/
     config/       # 配置
     graph/        # LangGraph 流程与节点
     service/      # 后端服务封装与图片分析服务
-    storage/      # 历史模型与测试辅助
     tools/        # 工具函数
   tests/          # 单元测试
   .env.example    # 环境变量模板
@@ -125,7 +124,7 @@ curl -N -X POST http://127.0.0.1:8000/api/v1/chat/stream ^
 - 目前这层 SSE 已符合前端事件流协议，但 agent 内部仍以阻塞图执行为主，所以 `delta` 现在是“消息块级流”，还不是逐 token 真流。
 - 会话历史当前默认落盘到 SQLite checkpoint，重启进程后线程记忆仍可保留。
 - Python Agent 侧已经不再负责文件上传与文件落盘，附件由前端通过 URL 引用。
-- Python Agent 侧正式账务工具默认直接调用 Java 后端接口，不再回退到本地 JSON 账本。
+- Python Agent 侧正式账务工具默认直接调用 Java 后端接口。
 
 ## 推荐配置
 

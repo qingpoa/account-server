@@ -158,8 +158,3 @@ def summarize_bills(
 def get_ledger_tools() -> list:
     """返回账本工具集合。"""
     return [add_bill, list_recent_bills, summarize_bills]
-
-
-def get_tools() -> list:
-    """返回图默认暴露的工具集合。"""
-    return get_ledger_tools()

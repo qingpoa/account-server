@@ -26,12 +26,15 @@ SYSTEM_PROMPT = """
 2. 金额统一使用正数。
 3. `kind` 只允许 `expense` 或 `income`。
 4. 分类尽量规范，优先使用：餐饮、交通、购物、工资、住房、其他。
-5. 查询和统计时，优先基于工具真实结果回答，再补一句简洁总结。
-6. 不要编造账单或统计结果。
-7. 当上下文里有一笔待补全的图片账单时，优先补齐它；只有 `amount`、`kind`、`category` 都齐全后才调用 `add_bill`。
-8. 回复要自然、清楚，尽量像一个日常帮用户管账的助手，要保持你可爱的说话风格，不要写成生硬的系统播报。
-9. 查询最近流水时，先把关键信息讲清楚，再补一些你的总结；必要时可以换行提升可读性。
-10. 统计时先说最重要的结论，再补充关键数字，不要机械复述原始字段名。
+5. 用户要求设置、修改、查看预算时，优先调用预算相关工具，不要只做口头回复。
+6. `budget_cycle` 只允许 1、2、3，分别表示月度、季度、年度。
+7. 预算金额必须为正数。
+8. 查询和统计时，优先基于工具真实结果回答，再补一句简洁总结。
+9. 不要编造账单、预算或统计结果。
+10. 当上下文里有一笔待补全的图片账单时，优先补齐它；只有 `amount`、`kind`、`category` 都齐全后才调用 `add_bill`。
+11. 回复要自然、清楚，尽量像一个日常帮用户管账的助手，要保持你可爱的说话风格，不要写成生硬的系统播报。
+12. 查询最近流水时，先把关键信息讲清楚，再补一些你的总结；必要时可以换行提升可读性。
+13. 统计时先说最重要的结论，再补充关键数字，不要机械复述原始字段名。
 """.strip()
 
 MISSING_FIELD_LABELS = {
@@ -189,9 +192,9 @@ def _messages_for_model(state: AccountAgentState, limit: int = MODEL_MESSAGE_WIN
 
 def create_agent(model=None, checkpointer=None, analysis_service: ImageAnalysisService | None = None):
     """创建并编译记账智能体的 LangGraph 工作流。"""
-    ledger_tools = get_tools()
+    agent_tools = get_tools()
     base_llm = _build_model(model=model)
-    assistant_llm = base_llm.bind_tools(ledger_tools)
+    assistant_llm = base_llm.bind_tools(agent_tools)
     analysis_tools = get_analysis_tools(
         analysis_service or ImageAnalysisService(llm=base_llm if model is not None else None)
     )
@@ -281,11 +284,11 @@ def create_agent(model=None, checkpointer=None, analysis_service: ImageAnalysisS
     def route_after_assistant(state: AccountAgentState):
         """将助手产生的工具调用路由到工具节点，否则结束流程。"""
         if getattr(state["messages"][-1], "tool_calls", None):
-            return "ledger_tools"
+            return "tools"
         return END
 
-    def route_after_ledger(state: AccountAgentState):
-        """判断账本工具结果是直接生成回执还是继续交给助手处理。"""
+    def route_after_tools(state: AccountAgentState):
+        """判断工具结果是直接生成记账回执还是继续交给助手处理。"""
         if _recent_add_bill_payloads(state):
             return "bill_reply_assistant"
         return "assistant"
@@ -331,7 +334,7 @@ def create_agent(model=None, checkpointer=None, analysis_service: ImageAnalysisS
     graph.add_node("analysis_tools", ToolNode(analysis_tools))
     graph.add_node("handle_image_analysis", handle_image_analysis)
     graph.add_node("assistant", assistant)
-    graph.add_node("ledger_tools", ToolNode(ledger_tools))
+    graph.add_node("tools", ToolNode(agent_tools))
     graph.add_node("bill_reply_assistant", bill_reply_assistant)
 
     graph.add_edge(START, "classify_input")
@@ -345,16 +348,16 @@ def create_agent(model=None, checkpointer=None, analysis_service: ImageAnalysisS
     graph.add_conditional_edges(
         "handle_image_analysis",
         route_after_assistant,
-        {"ledger_tools": "ledger_tools", END: END},
+        {"tools": "tools", END: END},
     )
     graph.add_conditional_edges(
         "assistant",
         route_after_assistant,
-        {"ledger_tools": "ledger_tools", END: END},
+        {"tools": "tools", END: END},
     )
     graph.add_conditional_edges(
-        "ledger_tools",
-        route_after_ledger,
+        "tools",
+        route_after_tools,
         {"bill_reply_assistant": "bill_reply_assistant", "assistant": "assistant"},
     )
     graph.add_edge("bill_reply_assistant", END)

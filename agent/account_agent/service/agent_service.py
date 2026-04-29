@@ -98,7 +98,7 @@ class AccountingAgentService:
         token: str | None = None,
     ):
         """将图执行过程转换为前端可消费的 SSE 事件流。"""
-        yield {"type": "info", "content": "Agent 正在思考..."}
+        yield {"type": "info", "content": "盒小记 正在思考..."}
         for event in self._agent.stream(
             {"messages": list(messages)},
             config=self._build_graph_config(

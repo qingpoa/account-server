@@ -24,7 +24,7 @@ class StatQueryService:
         self._category_service = CategoryService(client=self._client)
 
     def summarize_bills(self, params: dict[str, Any] | None = None) -> dict[str, Any]:
-        """组合 overview/category/list 接口，生成与本地账本服务相近的统计结构。"""
+        """组合 overview/category/list 接口，生成 Agent 期望的统计结构。"""
         filters = params or {}
         bill_type = self._resolve_type(filters)
         category_name = self._resolve_category_name(filters)

@@ -4,9 +4,24 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from account_agent.service.ledger_service import CATEGORY_ALIASES
 
-
+CATEGORY_ALIASES = {
+    "food": "餐饮",
+    "meal": "餐饮",
+    "dining": "餐饮",
+    "lunch": "餐饮",
+    "dinner": "餐饮",
+    "taxi": "交通",
+    "bus": "交通",
+    "subway": "交通",
+    "transport": "交通",
+    "shopping": "购物",
+    "shop": "购物",
+    "salary": "工资",
+    "payroll": "工资",
+    "rent": "住房",
+    "housing": "住房",
+}
 CANONICAL_CATEGORIES = {"餐饮", "交通", "购物", "工资", "住房", "其他"}
 REQUIRED_FIELDS = ("amount", "kind", "category")
 
