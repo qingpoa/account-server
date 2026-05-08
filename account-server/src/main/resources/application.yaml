@@ -35,6 +35,7 @@ mybatis:
     map-underscore-to-camel-case: true
 
 server:
+  forward-headers-strategy: framework
   servlet:
     context-path: /api/v1
   port: 8080
