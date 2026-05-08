@@ -7,78 +7,43 @@ from account_agent.tools.budget_tools import get_budget_progress, list_budgets, 
 
 
 class StubBudgetCommandService:
-    """用于验证预算写工具是否切到后端服务的桩对象。"""
+    """记录预算写入调用的桩对象。"""
 
     def __init__(self) -> None:
-        """初始化调用记录。"""
         self.last_payload: dict[str, object] | None = None
 
     def save_budget(self, payload: dict[str, object]) -> dict[str, object]:
-        """记录传入参数并返回模拟后端结果。"""
         self.last_payload = payload
         return {"id": 321}
 
 
 class StubBudgetQueryService:
-    """用于验证预算查询工具是否切到后端服务的桩对象。"""
+    """记录预算查询调用的桩对象。"""
 
     def __init__(self) -> None:
-        """初始化调用记录。"""
         self.last_list_params: dict[str, object] | None = None
         self.last_progress_params: dict[str, object] | None = None
 
     def list_budgets(self, params: dict[str, object]) -> list[dict[str, object]]:
-        """记录预算列表查询参数并返回模拟结果。"""
         self.last_list_params = params
         return [
-            {
-                "id": 1,
-                "category_id": 11,
-                "category": "餐饮",
-                "budget_cycle": 1,
-                "budget_amount": 800.0,
-                "used_amount": 120.0,
-                "remain_amount": 680.0,
-                "progress": 15.0,
-            },
-            {
-                "id": 2,
-                "category_id": 12,
-                "category": "交通",
-                "budget_cycle": 1,
-                "budget_amount": 300.0,
-                "used_amount": 80.0,
-                "remain_amount": 220.0,
-                "progress": 26.67,
-            },
+            {"id": 1, "category": "餐饮", "budget_amount": 800.0},
+            {"id": 2, "category": "交通", "budget_amount": 300.0},
         ]
 
     def get_budget_progress(self, params: dict[str, object]) -> dict[str, object]:
-        """记录预算进度查询参数并返回模拟结果。"""
         self.last_progress_params = params
         return {
             "total_budget": 1100.0,
             "total_used": 200.0,
             "total_remain": 900.0,
             "overspend_count": 0,
-            "category_progress": [
-                {
-                    "id": 1,
-                    "category_id": 11,
-                    "category": "餐饮",
-                    "budget_cycle": 1,
-                    "budget_amount": 800.0,
-                    "used_amount": 120.0,
-                    "remain_amount": 680.0,
-                    "progress": 15.0,
-                }
-            ],
+            "category_progress": [{"category": "餐饮", "progress": 15.0}],
         }
 
 
 class BudgetToolsTestCase(unittest.TestCase):
     def test_save_budget_uses_server_service(self) -> None:
-        """保存预算工具应调用后端预算写服务。"""
         command_service = StubBudgetCommandService()
         with patch(
             "account_agent.tools.budget_tools.get_budget_command_service",
@@ -106,7 +71,6 @@ class BudgetToolsTestCase(unittest.TestCase):
         self.assertEqual(result["budget"]["budget_amount"], 800.0)
 
     def test_save_budget_forwards_authorization_from_config(self) -> None:
-        """保存预算工具应从 RunnableConfig 中读取显式鉴权信息。"""
         command_service = StubBudgetCommandService()
         with patch(
             "account_agent.tools.budget_tools.get_budget_command_service",
@@ -131,7 +95,6 @@ class BudgetToolsTestCase(unittest.TestCase):
         )
 
     def test_budget_query_tools_use_server_services(self) -> None:
-        """预算查询工具应调用对应后端服务。"""
         query_service = StubBudgetQueryService()
         with patch(
             "account_agent.tools.budget_tools.get_budget_query_service",

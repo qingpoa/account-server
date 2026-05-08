@@ -10,11 +10,11 @@ from .ledger_tools import (
     get_ledger_tools,
     get_stat_query_service,
 )
-
+from .time_tools import get_time_tools
 
 def get_tools() -> list:
     """返回默认暴露给主智能体的全部工具集合。"""
-    return [*get_ledger_tools(), *get_budget_tools()]
+    return [*get_ledger_tools(), *get_budget_tools(), *get_time_tools()]
 
 __all__ = [
     "get_analysis_tools",

@@ -5,11 +5,31 @@ from functools import lru_cache
 
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
+from pydantic import BaseModel, Field
 
 from account_agent.server import ServerClient
 from account_agent.service.bill_command_service import BillCommandService
 from account_agent.service.bill_query_service import BillQueryService
 from account_agent.service.stat_query_service import StatQueryService
+
+
+class ListRecentBillsInput(BaseModel):
+    """定义账单列表查询工具的输入参数。"""
+
+    limit: int = Field(default=5, description="最多返回多少条账单，默认 5 条。")
+    kind: str | None = Field(default=None, description="可选的收支类型，只允许 income 或 expense。")
+    category: str | None = Field(default=None, description="可选的账单分类，如餐饮、交通、购物、工资、住房、其他。")
+    start_time: str | None = Field(default=None, description="可选的查询开始时间，格式为 YYYY-MM-DD HH:mm:ss。")
+    end_time: str | None = Field(default=None, description="可选的查询结束时间，格式为 YYYY-MM-DD HH:mm:ss。")
+
+
+class SummarizeBillsInput(BaseModel):
+    """定义账单统计工具的输入参数。"""
+
+    kind: str | None = Field(default=None, description="可选的收支类型，只允许 income 或 expense。")
+    category: str | None = Field(default=None, description="可选的账单分类，如餐饮、交通、购物、工资、住房、其他。")
+    start_time: str | None = Field(default=None, description="可选的统计开始时间，格式为 YYYY-MM-DD HH:mm:ss。")
+    end_time: str | None = Field(default=None, description="可选的统计结束时间，格式为 YYYY-MM-DD HH:mm:ss。")
 
 
 def _resolve_request_auth(config: RunnableConfig | None) -> tuple[str | None, str | None]:
@@ -119,11 +139,13 @@ def add_bill(
     }
 
 
-@tool
+@tool(args_schema=ListRecentBillsInput)
 def list_recent_bills(
     limit: int = 5,
     kind: str | None = None,
     category: str | None = None,
+    start_time: str | None = None,
+    end_time: str | None = None,
     config: RunnableConfig = None,
 ) -> dict[str, object]:
     """查询最近账单，可按 kind 或 category 过滤。"""
@@ -133,15 +155,19 @@ def list_recent_bills(
             "limit": limit,
             "kind": kind,
             "category": category,
+            "start_time": start_time,
+            "end_time": end_time,
         }
     )
     return {"ok": True, "count": len(bills), "items": bills}
 
 
-@tool
+@tool(args_schema=SummarizeBillsInput)
 def summarize_bills(
     kind: str | None = None,
     category: str | None = None,
+    start_time: str | None = None,
+    end_time: str | None = None,
     config: RunnableConfig = None,
 ) -> dict[str, object]:
     """按收支类型和分类汇总账单。"""
@@ -150,6 +176,8 @@ def summarize_bills(
         {
             "kind": kind,
             "category": category,
+            "start_time": start_time,
+            "end_time": end_time,
         }
     )
     return {"ok": True, "summary": summary}

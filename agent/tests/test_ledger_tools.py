@@ -103,10 +103,33 @@ class LedgerToolsTestCase(unittest.TestCase):
             "account_agent.tools.ledger_tools.get_stat_query_service",
             return_value=stat_query_service,
         ):
-            list_result = list_recent_bills.invoke({"limit": 3, "kind": "expense", "category": "餐饮"})
-            stat_result = summarize_bills.invoke({"kind": "expense", "category": "餐饮"})
+            params = {
+                "kind": "expense",
+                "category": "餐饮",
+                "start_time": "2026-03-01 00:00:00",
+                "end_time": "2026-03-31 23:59:59",
+            }
+            list_result = list_recent_bills.invoke({"limit": 3, **params})
+            stat_result = summarize_bills.invoke(params)
 
-        self.assertEqual(bill_query_service.last_params, {"limit": 3, "kind": "expense", "category": "餐饮"})
-        self.assertEqual(stat_query_service.last_params, {"kind": "expense", "category": "餐饮"})
+        self.assertEqual(
+            bill_query_service.last_params,
+            {
+                "limit": 3,
+                "kind": "expense",
+                "category": "餐饮",
+                "start_time": "2026-03-01 00:00:00",
+                "end_time": "2026-03-31 23:59:59",
+            },
+        )
+        self.assertEqual(
+            stat_query_service.last_params,
+            {
+                "kind": "expense",
+                "category": "餐饮",
+                "start_time": "2026-03-01 00:00:00",
+                "end_time": "2026-03-31 23:59:59",
+            },
+        )
         self.assertEqual(list_result["count"], 1)
         self.assertEqual(stat_result["summary"]["total_amount"], 12.5)
