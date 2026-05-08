@@ -12,8 +12,12 @@
         from bill
         where user_id = #{userId}
           and is_deleted = 0
+        <if test="startTime != null">
           and record_time <![CDATA[ >= ]]> #{startTime}
+        </if>
+        <if test="endTime != null">
           and record_time <![CDATA[ <= ]]> #{endTime}
+        </if>
     </select>
 
     <select id="category" resultType="com.qingpo.pojo.stat.StatCategoryVO">
@@ -25,8 +29,12 @@
         where b.user_id = #{userId}
           and b.type = #{type}
           and b.is_deleted = 0
+        <if test="startTime != null">
           and b.record_time <![CDATA[ >= ]]> #{startTime}
+        </if>
+        <if test="endTime != null">
           and b.record_time <![CDATA[ <= ]]> #{endTime}
+        </if>
         group by b.category_id, sc.name
         order by amount desc
     </select>

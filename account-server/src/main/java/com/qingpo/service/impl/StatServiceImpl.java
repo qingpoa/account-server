@@ -64,9 +64,6 @@ public class StatServiceImpl implements StatService {
             } catch (Exception e) {
                 log.warn("读取overview缓存失败, key={}", cacheKey, e);
             }
-
-            startTime = LocalDate.now().withDayOfMonth(1).atStartOfDay();
-            endTime = LocalDateTime.now();
             overviewVO = statMapper.overview(userId, startTime, endTime);
             if (overviewVO != null) {
                 overviewVO.setBalance(overviewVO.getTotalIncome().subtract(overviewVO.getTotalExpense()));
@@ -78,13 +75,10 @@ public class StatServiceImpl implements StatService {
             }
             return overviewVO;
         }
-        if (startTime == null) {
-            startTime = LocalDate.now().withDayOfMonth(1).atStartOfDay();
-        }
         if (endTime == null) {
             endTime = LocalDateTime.now();
         }
-        if (startTime.isAfter(endTime)) {
+        if (startTime != null && startTime.isAfter(endTime)) {
             throw new BusinessException(Result.BAD_REQUEST, "开始时间不能晚于结束时间");
         }
         overviewVO = statMapper.overview(userId, startTime, endTime);
@@ -114,8 +108,6 @@ public class StatServiceImpl implements StatService {
                 log.warn("读取category缓存失败, key={}", cacheKey, e);
             }
 
-            startTime = LocalDate.now().withDayOfMonth(1).atStartOfDay();
-            endTime = LocalDateTime.now();
             List<StatCategoryVO> list = buildCategoryStats(userId, type, startTime, endTime);
             try {
                 redisUtils.set(cacheKey, list, STAT_CACHE_TTL, TimeUnit.MINUTES);
@@ -125,13 +117,10 @@ public class StatServiceImpl implements StatService {
             return list;
         }
 
-        if (startTime == null) {
-            startTime = LocalDate.now().withDayOfMonth(1).atStartOfDay();
-        }
         if (endTime == null) {
             endTime = LocalDateTime.now();
         }
-        if (startTime.isAfter(endTime)) {
+        if (startTime != null && startTime.isAfter(endTime)) {
             throw new BusinessException(Result.BAD_REQUEST, "开始时间不能晚于结束时间");
         }
 
