@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from account_agent.service.stat_query_service import StatQueryService
+from account_agent.service import StatQueryService
 
 
 class StubServerClient:
@@ -116,7 +116,7 @@ class StatQueryServiceTestCase(unittest.TestCase):
         self.assertEqual(
             overview_call["params"],
             {
-                "startTime": "2026-03-01 00:00:00",
-                "endTime": "2026-03-31 23:59:59",
+                "startTime": "2026-03-01T00:00:00",
+                "endTime": "2026-03-31T23:59:59",
             },
         )

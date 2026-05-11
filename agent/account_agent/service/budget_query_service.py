@@ -4,6 +4,7 @@ from typing import Any
 
 from account_agent.api.errors import AgentError
 from account_agent.server import ServerClient
+from account_agent.service.budget_utils import resolve_budget_cycle
 
 
 class BudgetQueryService:
@@ -43,42 +44,8 @@ class BudgetQueryService:
     def _build_cycle_params(self, params: dict[str, Any], *, required: bool) -> dict[str, Any]:
         """构造预算周期查询参数。"""
         raw_cycle = params.get("cycle", params.get("budgetCycle"))
-        if raw_cycle in (None, ""):
-            if required:
-                raise AgentError(status_code=400, message="cycle is required")
-            return {}
-
-        if isinstance(raw_cycle, str):
-            text = raw_cycle.strip()
-            cycle_aliases = {
-                "月": 1,
-                "月度": 1,
-                "monthly": 1,
-                "季度": 2,
-                "季": 2,
-                "quarter": 2,
-                "quarterly": 2,
-                "年度": 3,
-                "年": 3,
-                "year": 3,
-                "yearly": 3,
-                "annual": 3,
-            }
-            if text in cycle_aliases:
-                return {"cycle": cycle_aliases[text]}
-            try:
-                raw_cycle = int(text)
-            except ValueError as exc:
-                raise AgentError(status_code=400, message="cycle must be 1, 2 or 3") from exc
-
-        try:
-            cycle = int(raw_cycle)
-        except (TypeError, ValueError) as exc:
-            raise AgentError(status_code=400, message="cycle must be a number") from exc
-
-        if cycle not in {1, 2, 3}:
-            raise AgentError(status_code=400, message="cycle must be 1, 2 or 3")
-        return {"cycle": cycle}
+        cycle = resolve_budget_cycle(raw_cycle, field_name="cycle", required=required)
+        return {"cycle": cycle} if cycle is not None else {}
 
     def _map_budget_item(self, item: Any) -> dict[str, Any]:
         """将预算列表项映射为 Agent 使用的统一结构。"""

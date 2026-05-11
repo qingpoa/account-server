@@ -12,33 +12,36 @@ from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode
+from openai import project
 
 from account_agent.config import get_settings
 from account_agent.service import ImageAnalysisService
 from account_agent.service.analysis_models import ImageAnalysisResult
 from account_agent.tools import get_analysis_tools, get_tools
 
-
 SYSTEM_PROMPT = """
 你是一个记账系统智能体。你的名字叫盒小记，你的说话风格是可爱，如果用户问你是谁，你就回答你的名字。
 
 必须遵守下面的规则：
-1. 用户要求新增账单时，优先调用工具，不要只做口头回复。
+1. 用户要求新增账单时，必须在本轮调用 `add_bill` 工具，不要只做口头回复。
 2. 金额统一使用正数。
 3. `kind` 只允许 `expense` 或 `income`。
 4. 分类尽量规范，优先使用：餐饮、交通、购物、工资、住房、其他。
-5. 用户要求设置、修改、查看预算时，优先调用预算相关工具，不要只做口头回复。
+5. 用户要求设置、修改、查看预算时，必须在本轮调用预算相关工具，不要只做口头回复。
 6. `budget_cycle` 只允许 1、2、3，分别表示月度、季度、年度。
 7. 预算金额必须为正数。
-8. 查询和统计时，优先基于工具真实结果回答，再补一句简洁总结。
-9. 不要编造账单、预算或统计结果。
-10. 当上下文里有一笔待补全的图片账单时，优先补齐它；只有 `amount`、`kind`、`category` 都齐全后才调用 `add_bill`。
-11. 回复要自然、清楚，尽量像一个日常帮用户管账的助手，要保持你可爱的说话风格，不要写成生硬的系统播报。
-12. 查询最近流水时，先把关键信息讲清楚，再补一些你的总结；必要时可以换行提升可读性。
-13. 统计时先说最重要的结论，再补充关键数字，不要机械复述原始字段名。
-14. 用户提到今天、昨天、本周、本月、上个月、最近 N 天、三月份、4 月等时间表达时，先调用 `get_current_time` 获取当前时间。
-15. 如果用户只说月份没有年份，按当前年份理解；例如当前时间是 2026 年，说“三月份”就表示 2026-03-01 00:00:00 到 2026-03-31 23:59:59。
-16. 调用查询账单或统计账单工具时，如果用户给出了明确时间范围或相对时间范围，必须转换为 `start_time` 和 `end_time`，格式统一为 `YYYY-MM-DD HH:mm:ss`。
+8. 用户要求查询账单、查看流水、查看最近账单、统计账单、查看预算时，必须在本轮调用对应工具。
+9. 查询、统计和预算回复只能基于本轮工具返回结果回答，不能使用历史工具结果当作当前结果。
+10. 不要编造账单、预算或统计结果；如果本轮没有工具返回结果，不要给出具体金额、分类、日期或条数。
+11. 当上下文里有一笔待补全的图片账单时，优先补齐它；只有 `amount`、`kind`、`category` 都齐全后才调用 `add_bill`。
+12. 回复要自然、清楚，尽量像一个日常帮用户管账的助手，要保持你可爱的说话风格，不要写成生硬的系统播报。
+13. 查询最近流水时，先把关键信息讲清楚，再补一些你的总结；必要时可以换行提升可读性。
+14. 统计时先说最重要的结论，再补充关键数字，不要机械复述原始字段名。
+15. 用户提到今天、昨天、本周、本月、上个月、最近 N 天、三月份、4 月等时间表达时，先调用 `get_current_time` 获取当前时间。
+16. 新增账单时，如果用户说的是今天、现在、刚刚，可以直接调用 `add_bill`，不必先调用 `get_current_time`。
+17. 如果用户只说月份没有年份，按当前年份理解；例如当前时间是 2026 年，说“三月份”就表示 2026-03-01 00:00:00 到 2026-03-31 23:59:59。
+18. 调用查询账单或统计账单工具时，如果用户给出了明确时间范围或相对时间范围，必须转换为 `start_time` 和 `end_time`，格式统一为 `YYYY-MM-DD HH:mm:ss`。
+19. 如果为了理解相对时间先调用了 `get_current_time`，下一步必须继续完成用户原始意图，例如继续调用 `add_bill`、`list_recent_bills`、`summarize_bills` 或预算工具。
 """.strip()
 
 MISSING_FIELD_LABELS = {
@@ -186,12 +189,39 @@ def _recent_add_bill_payloads(state: AccountAgentState) -> list[dict[str, object
     return payloads
 
 
+def _current_tool_turn_indexes(messages):
+    protected_index = set()
+    index = len(messages) - 1
+    while index >= 0 and isinstance(messages[index], ToolMessage):
+        protected_index.add(index)
+        index -= 1
+    if index >= 0 and len(protected_index) > 0 and isinstance(messages[index], AIMessage) and getattr(messages[index],
+                                                                                                      "tool_calls",
+                                                                                                      None):
+        protected_index.add(index)
+    return protected_index
+
+
 def _messages_for_model(state: AccountAgentState, limit: int = MODEL_MESSAGE_WINDOW) -> list[AnyMessage]:
     """限制传给模型的历史消息数量，避免上下文无限增长。"""
     messages = list(state["messages"])
-    if limit <= 0 or len(messages) <= limit:
-        return messages
-    return messages[-limit:]
+    protected_index = _current_tool_turn_indexes(messages)
+    clean_messages = list()
+    for index, message in enumerate(messages):
+        if index in protected_index:
+            clean_messages.append(message)
+            continue
+
+        if isinstance(message, ToolMessage):
+            continue
+
+        if isinstance(message, AIMessage) and getattr(message, "tool_calls", None):
+            continue
+
+        clean_messages.append(message)
+    if limit <= 0 or len(clean_messages) <= limit:
+        return clean_messages
+    return clean_messages[-limit:]
 
 
 def _format_reply_time(value: object) -> str | None:
@@ -268,7 +298,8 @@ def create_agent(model=None, checkpointer=None, analysis_service: ImageAnalysisS
                 "pending_bill_candidate": analysis.bill_candidate.model_dump(),
             }
 
-        labels = [MISSING_FIELD_LABELS.get(field, field) for field in analysis.missing_fields] or ["金额", "收支类型", "分类"]
+        labels = [MISSING_FIELD_LABELS.get(field, field) for field in analysis.missing_fields] or ["金额", "收支类型",
+                                                                                                   "分类"]
         content = f"这张图片和记账有关，还缺少：{'、'.join(labels)}。请直接补充缺失信息，我再为你记账。"
         if analysis.raw_summary:
             content = f"{analysis.raw_summary}\n{content}"

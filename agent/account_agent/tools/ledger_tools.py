@@ -8,9 +8,8 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from account_agent.server import ServerClient
-from account_agent.service.bill_command_service import BillCommandService
-from account_agent.service.bill_query_service import BillQueryService
-from account_agent.service.stat_query_service import StatQueryService
+from account_agent.service import BillCommandService, BillQueryService, StatQueryService
+from account_agent.tools.tool_auth import resolve_request_auth
 
 
 class ListRecentBillsInput(BaseModel):
@@ -30,19 +29,6 @@ class SummarizeBillsInput(BaseModel):
     category: str | None = Field(default=None, description="可选的账单分类，如餐饮、交通、购物、工资、住房、其他。")
     start_time: str | None = Field(default=None, description="可选的统计开始时间，格式为 YYYY-MM-DD HH:mm:ss。")
     end_time: str | None = Field(default=None, description="可选的统计结束时间，格式为 YYYY-MM-DD HH:mm:ss。")
-
-
-def _resolve_request_auth(config: RunnableConfig | None) -> tuple[str | None, str | None]:
-    """从 LangGraph configurable 中读取当前请求的鉴权信息。"""
-    configurable = (config or {}).get("configurable", {})
-    if not isinstance(configurable, dict):
-        return None, None
-    authorization = configurable.get("authorization")
-    token = configurable.get("token")
-    return (
-        str(authorization).strip() if authorization else None,
-        str(token).strip() if token else None,
-    )
 
 
 @lru_cache(maxsize=128)
@@ -114,7 +100,7 @@ def add_bill(
     config: RunnableConfig = None,
 ) -> dict[str, object]:
     """新增一笔账单，金额必须为正，kind 只能是 expense 或 income。"""
-    authorization, token = _resolve_request_auth(config)
+    authorization, token = resolve_request_auth(config)
     result = get_bill_command_service(authorization=authorization, token=token).add_bill(
         {
             "amount": amount,
@@ -149,7 +135,7 @@ def list_recent_bills(
     config: RunnableConfig = None,
 ) -> dict[str, object]:
     """查询最近账单，可按 kind 或 category 过滤。"""
-    authorization, token = _resolve_request_auth(config)
+    authorization, token = resolve_request_auth(config)
     bills = get_bill_query_service(authorization=authorization, token=token).list_recent_bills(
         {
             "limit": limit,
@@ -171,7 +157,7 @@ def summarize_bills(
     config: RunnableConfig = None,
 ) -> dict[str, object]:
     """按收支类型和分类汇总账单。"""
-    authorization, token = _resolve_request_auth(config)
+    authorization, token = resolve_request_auth(config)
     summary = get_stat_query_service(authorization=authorization, token=token).summarize_bills(
         {
             "kind": kind,

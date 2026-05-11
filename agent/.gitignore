@@ -23,6 +23,7 @@ build/
 .claude/
 data/*.db
 data/*.json
+tests/
 runtime_data/*.sqlite
 runtime_data/*.sqlite-shm
 runtime_data/*.sqlite-wal

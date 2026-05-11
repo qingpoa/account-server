@@ -1,17 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 
 from account_agent.api.errors import AgentError
 from account_agent.server import ServerClient
+from account_agent.service.bill_constants import KIND_TO_TYPE
 from account_agent.service.category_service import CategoryService
+from account_agent.service.time_utils import format_server_datetime
 
-
-KIND_TO_TYPE = {
-    "income": 1,
-    "expense": 2,
-}
 
 class BillCommandService:
     """封装账单写操作，并负责将 Agent 字段映射到后端请求结构。"""
@@ -87,26 +83,9 @@ class BillCommandService:
         return str(raw_remark).strip()
 
     def _resolve_record_time(self, payload: dict[str, Any]) -> str | None:
-        """将时间统一转换为后端约定的 YYYY-MM-DD HH:mm:ss。"""
+        """将时间统一转换为后端约定的 YYYY-MM-DDTHH:mm:ss。"""
         raw_record_time = payload.get("recordTime", payload.get("occurred_at"))
-        if raw_record_time in (None, ""):
-            return None
-
-        text = str(raw_record_time).strip()
-        if not text:
-            return None
-
-        try:
-            dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
-        except ValueError:
-            try:
-                dt = datetime.strptime(text, "%Y-%m-%d %H:%M:%S")
-            except ValueError as exc:
-                raise AgentError(
-                    status_code=400,
-                    message="recordTime must be ISO format or YYYY-MM-DD HH:mm:ss",
-                ) from exc
-        return dt.strftime("%Y-%m-%d %H:%M:%S")
+        return format_server_datetime(raw_record_time, field_name="recordTime")
 
     def _resolve_is_ai_generated(self, payload: dict[str, Any]) -> int:
         """默认为 AI 生成，也允许调用方显式覆盖。"""

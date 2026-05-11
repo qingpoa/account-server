@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 from account_agent.api.errors import AgentError
-from account_agent.service.bill_command_service import BillCommandService
+from account_agent.service import BillCommandService
 
 
 class StubServerClient:
@@ -68,7 +68,7 @@ class BillCommandServiceTestCase(unittest.TestCase):
                 "amount": 8.71,
                 "type": 2,
                 "remark": "打车回家",
-                "recordTime": "2026-04-21 19:25:30",
+                "recordTime": "2026-04-21T19:25:30",
                 "isAiGenerated": 0,
             },
         )
@@ -93,7 +93,7 @@ class BillCommandServiceTestCase(unittest.TestCase):
                 "amount": 2000.0,
                 "type": 1,
                 "remark": "四月工资",
-                "recordTime": "2026-04-21 09:00:00",
+                "recordTime": "2026-04-21T09:00:00",
                 "isAiGenerated": 0,
             },
         )

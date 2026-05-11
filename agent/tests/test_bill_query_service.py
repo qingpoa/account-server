@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 from account_agent.api.errors import AgentError
-from account_agent.service.bill_query_service import BillQueryService
+from account_agent.service import BillQueryService
 
 
 class StubServerClient:
@@ -72,8 +72,8 @@ class BillQueryServiceTestCase(unittest.TestCase):
             {
                 "pageNum": 1,
                 "pageSize": 3,
-                "startTime": "2026-03-01 00:00:00",
-                "endTime": "2026-03-31 23:59:59",
+                "startTime": "2026-03-01T00:00:00",
+                "endTime": "2026-03-31T23:59:59",
                 "type": 2,
                 "categoryId": 5,
             },

@@ -1,18 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 
 from account_agent.api.errors import AgentError
 from account_agent.server import ServerClient
-from account_agent.service.bill_command_service import KIND_TO_TYPE
+from account_agent.service.bill_constants import KIND_TO_TYPE, TYPE_TO_KIND
 from account_agent.service.category_service import CategoryService
-
-
-TYPE_TO_KIND = {
-    1: "income",
-    2: "expense",
-}
+from account_agent.service.time_utils import build_time_params
 
 
 class StatQueryService:
@@ -103,8 +97,7 @@ class StatQueryService:
         request_params = {
             "pageNum": 1,
             "pageSize": 1,
-            "startTime": self._format_server_datetime(self._copy_time_filter(filters, "startTime")),
-            "endTime": self._format_server_datetime(self._copy_time_filter(filters, "endTime")),
+            **build_time_params(filters),
         }
 
         if bill_type is not None:
@@ -139,10 +132,7 @@ class StatQueryService:
         """请求总览统计接口。"""
         data = self._client.get(
             "/stat/overview",
-            params={
-                "startTime": self._format_server_datetime(self._copy_time_filter(filters, "startTime")),
-                "endTime": self._format_server_datetime(self._copy_time_filter(filters, "endTime")),
-            },
+            params=build_time_params(filters),
         )
         if not isinstance(data, dict):
             raise AgentError(status_code=500, message="总览统计接口返回格式不正确")
@@ -154,8 +144,7 @@ class StatQueryService:
             "/stat/category",
             params={
                 "type": bill_type,
-                "startTime": self._format_server_datetime(self._copy_time_filter(filters, "startTime")),
-                "endTime": self._format_server_datetime(self._copy_time_filter(filters, "endTime")),
+                **build_time_params(filters),
             },
         )
         if not isinstance(data, list):
@@ -237,28 +226,3 @@ class StatQueryService:
             if bill_type is None:
                 raise AgentError(status_code=400, message="kind or type is required when category is 其他")
         return self._category_service.resolve_category_id(category_name=normalized_name, bill_type=bill_type)
-
-    @staticmethod
-    def _format_server_datetime(value: Any) -> str | None:
-        """将传入时间转换为后端约定的 YYYY-MM-DD HH:mm:ss。"""
-        if value in (None, ""):
-            return None
-        text = str(value).strip()
-        try:
-            dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
-        except ValueError:
-            try:
-                dt = datetime.strptime(text, "%Y-%m-%d %H:%M:%S")
-            except ValueError as exc:
-                raise AgentError(
-                    status_code=400,
-                    message="time must be ISO format or YYYY-MM-DD HH:mm:ss",
-                ) from exc
-        return dt.strftime("%Y-%m-%d %H:%M:%S")
-
-    @staticmethod
-    def _copy_time_filter(filters: dict[str, Any], field_name: str) -> Any:
-        """透传 startTime/endTime，兼容蛇形命名。"""
-        if field_name == "startTime":
-            return filters.get("startTime", filters.get("start_time"))
-        return filters.get("endTime", filters.get("end_time"))

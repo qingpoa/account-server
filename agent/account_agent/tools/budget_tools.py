@@ -7,8 +7,8 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from account_agent.server import ServerClient
-from account_agent.service.budget_command_service import BudgetCommandService
-from account_agent.service.budget_query_service import BudgetQueryService
+from account_agent.service import BudgetCommandService, BudgetQueryService
+from account_agent.tools.tool_auth import resolve_request_auth
 
 
 class SaveBudgetInput(BaseModel):
@@ -42,19 +42,6 @@ class GetBudgetProgressInput(BaseModel):
     )
 
 
-def _resolve_request_auth(config: RunnableConfig | None) -> tuple[str | None, str | None]:
-    """从 LangGraph configurable 中读取当前请求的鉴权信息。"""
-    configurable = (config or {}).get("configurable", {})
-    if not isinstance(configurable, dict):
-        return None, None
-    authorization = configurable.get("authorization")
-    token = configurable.get("token")
-    return (
-        str(authorization).strip() if authorization else None,
-        str(token).strip() if token else None,
-    )
-
-
 @lru_cache(maxsize=128)
 def get_budget_command_service(
     authorization: str | None = None,
@@ -84,7 +71,7 @@ def save_budget(
     config: RunnableConfig = None,
 ) -> dict[str, object]:
     """保存或修改预算，预算周期只允许 1(月度)、2(季度)、3(年度)。"""
-    authorization, token = _resolve_request_auth(config)
+    authorization, token = resolve_request_auth(config)
     result = get_budget_command_service(authorization=authorization, token=token).save_budget(
         {
             "category": category,
@@ -109,7 +96,7 @@ def list_budgets(
     config: RunnableConfig = None,
 ) -> dict[str, object]:
     """查询预算列表，可按预算周期过滤。"""
-    authorization, token = _resolve_request_auth(config)
+    authorization, token = resolve_request_auth(config)
     result = get_budget_query_service(authorization=authorization, token=token).list_budgets(
         {"cycle": cycle}
     )
@@ -126,7 +113,7 @@ def get_budget_progress(
     config: RunnableConfig = None,
 ) -> dict[str, object]:
     """查询指定预算周期的整体预算进度。"""
-    authorization, token = _resolve_request_auth(config)
+    authorization, token = resolve_request_auth(config)
 
     progress = get_budget_query_service(
         authorization=authorization,

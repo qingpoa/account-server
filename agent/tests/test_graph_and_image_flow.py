@@ -12,7 +12,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from account_agent.config import get_settings
 from account_agent.graph import build_graph, create_local_agent
 from account_agent.graph.builder import _recent_add_bill_payloads, close_local_checkpointer
-from account_agent.service.image_analysis_service import ImageAnalysisService
+from account_agent.service import ImageAnalysisService
 
 
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"

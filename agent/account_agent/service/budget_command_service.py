@@ -4,6 +4,7 @@ from typing import Any
 
 from account_agent.api.errors import AgentError
 from account_agent.server import ServerClient
+from account_agent.service.budget_utils import resolve_budget_cycle
 from account_agent.service.category_service import CategoryService
 
 
@@ -46,39 +47,9 @@ class BudgetCommandService:
     def _resolve_budget_cycle(self, payload: dict[str, Any]) -> int:
         """将预算周期转换为后端枚举值。"""
         raw_cycle = payload.get("budgetCycle", payload.get("budget_cycle"))
-        if raw_cycle is None:
+        cycle = resolve_budget_cycle(raw_cycle, field_name="budgetCycle")
+        if cycle is None:
             raise AgentError(status_code=400, message="budgetCycle is required")
-
-        if isinstance(raw_cycle, str):
-            text = raw_cycle.strip()
-            cycle_aliases = {
-                "月": 1,
-                "月度": 1,
-                "monthly": 1,
-                "季度": 2,
-                "季": 2,
-                "quarter": 2,
-                "quarterly": 2,
-                "年度": 3,
-                "年": 3,
-                "year": 3,
-                "yearly": 3,
-                "annual": 3,
-            }
-            if text in cycle_aliases:
-                return cycle_aliases[text]
-            try:
-                raw_cycle = int(text)
-            except ValueError as exc:
-                raise AgentError(status_code=400, message="budgetCycle must be 1, 2 or 3") from exc
-
-        try:
-            cycle = int(raw_cycle)
-        except (TypeError, ValueError) as exc:
-            raise AgentError(status_code=400, message="budgetCycle must be a number") from exc
-
-        if cycle not in {1, 2, 3}:
-            raise AgentError(status_code=400, message="budgetCycle must be 1, 2 or 3")
         return cycle
 
     def _resolve_budget_amount(self, payload: dict[str, Any]) -> float:
